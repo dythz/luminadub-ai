@@ -367,7 +367,7 @@ function renderQueue(){
 
 // ── CHUNKED UPLOAD ──
 async function uploadInChunks(file, fileIdx, totalFiles){
-    var CHUNK=48*1024*1024; // 48 MB per chunk
+    var CHUNK=5*1024*1024; // 5 MB per chunk — stays under RunPod proxy limits
     var total=Math.ceil(file.size/CHUNK);
     var projectId=null;
     for(var i=0;i<total;i++){
