@@ -17,6 +17,13 @@ from flask_cors import CORS
 os.environ["COQUI_TOS_AGREED"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 
+# Ensure spawned worker subprocesses can import project modules from this directory.
+# mp.get_context("spawn") starts a fresh Python interpreter that does NOT inherit
+# sys.path from the parent — it only sees site-packages unless PYTHONPATH is set.
+_APP_DIR = str(Path(__file__).parent.resolve())
+if _APP_DIR not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+    os.environ["PYTHONPATH"] = _APP_DIR + os.pathsep + os.environ.get("PYTHONPATH", "")
+
 if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -83,19 +90,21 @@ class JobQueue:
                 self._active["stage"] = stage
 
     def _execute(self, job: dict):
-        import worker as _worker_module
-        ctx = mp.get_context("spawn")
-        event_queue = ctx.Queue()
-        p = ctx.Process(
-            target=_worker_module.run,
-            args=(job["project_id"], job["session_id"], job["config_overrides"], event_queue),
-            daemon=False,
-        )
-        p.start()
-        logger.info(f"[WORKER] PID {p.pid} started for job {job['id']} ({job['filename']})")
-        job_start = time.time()
-
+        p = None
+        event_queue = None
         try:
+            import worker as _worker_module
+            ctx = mp.get_context("spawn")
+            event_queue = ctx.Queue()
+            p = ctx.Process(
+                target=_worker_module.run,
+                args=(job["project_id"], job["session_id"], job["config_overrides"], event_queue),
+                daemon=False,
+            )
+            p.start()
+            logger.info(f"[WORKER] PID {p.pid} started for job {job['id']} ({job['filename']})")
+            job_start = time.time()
+
             while True:
                 # Hard timeout
                 if time.time() - job_start > self.MAX_JOB_SECONDS:
@@ -133,14 +142,15 @@ class JobQueue:
                     pass
 
         except Exception as e:
-            logger.exception(f"[WORKER] Error managing subprocess: {e}")
-            if p.is_alive():
-                p.terminate()
-                p.join(timeout=10)
+            logger.exception(f"[WORKER] Job {job['id']} failed: {e}")
+            sse_send(job["session_id"], "error", {"message": f"Erro ao processar video: {e}"})
         finally:
-            if p.is_alive():
-                p.kill()
-                p.join(timeout=5)
+            try:
+                if p is not None and p.is_alive():
+                    p.kill()
+                    p.join(timeout=5)
+            except Exception:
+                pass
 
             with self._lock:
                 job["status"] = "done"
