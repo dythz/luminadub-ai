@@ -98,6 +98,15 @@ def run(project_id: str, session_id: str, config_overrides: dict, event_queue) -
             result = stage_fn(project_dir, config, progress=_progress)
 
             if result.success:
+                # Guard: transcribe must produce at least 1 cue or everything downstream is wasted
+                if stage_name == "transcribe":
+                    en_srt = project_dir / "work" / "en.srt"
+                    if not en_srt.exists() or en_srt.stat().st_size < 10:
+                        err = "Transcricao retornou vazio — audio pode ser silencioso ou corrompido"
+                        state.mark_error(stage_name, err)
+                        emit("stage_error", {"stage": stage_name, "display": display, "error": err})
+                        return
+
                 state.mark_completed(stage_name, metadata=result.metadata or {})
                 emit("stage_done", {
                     "stage": stage_name,

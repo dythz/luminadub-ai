@@ -58,9 +58,10 @@ def merge(project_dir: Path, config: Config, progress=None) -> StageResult:
 
         if not output_video.exists():
             return StageResult(success=False, error=f"Mux output not created: {output_video}")
-        if output_video.stat().st_size < 1000:
-            logger.warning(f"[MERGE] Output video suspiciously small: {output_video.stat().st_size} bytes")
-        logger.info(f"[MERGE] Output video created: {output_video}")
+        size = output_video.stat().st_size
+        if size < 50_000:
+            return StageResult(success=False, error=f"Output video is corrupt or empty ({size} bytes): {output_video}")
+        logger.info(f"[MERGE] Output video created: {output_video} ({size // 1024 // 1024} MB)")
 
         if progress:
             progress(0.75, desc="Preparing subtitles...")

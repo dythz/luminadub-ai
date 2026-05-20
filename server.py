@@ -40,6 +40,17 @@ app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024 * 1024  # 10GB upload limit
 CONFIG = Config()
 CONFIG.ensure_dirs()
 
+# Clean up any stale chunk directories left by interrupted uploads
+def _cleanup_stale_chunks():
+    import shutil
+    try:
+        for chunks_dir in CONFIG.PROJECTS_DIR.glob("*/chunks"):
+            shutil.rmtree(str(chunks_dir), ignore_errors=True)
+            logger.info(f"[STARTUP] Removed stale chunks: {chunks_dir}")
+    except Exception:
+        pass
+_cleanup_stale_chunks()
+
 # Active SSE queues keyed by session_id
 sse_queues: dict[str, Queue] = {}
 
@@ -208,10 +219,13 @@ job_queue = JobQueue()
 # ── SSE helpers ──────────────────────────────────────────────────────
 
 def sse_send(session_id: str, event: str, data: dict):
-    """Push an event to all listeners for a session."""
+    """Push an event to all listeners for a session (non-blocking — drops if client disconnected)."""
     q = sse_queues.get(session_id)
     if q:
-        q.put((event, data))
+        try:
+            q.put_nowait((event, data))
+        except Exception:
+            pass  # client disconnected or queue full — never block the job thread
 
 
 def progress_callback_factory(session_id: str):
@@ -368,7 +382,7 @@ def sse_stream(session_id):
     """SSE endpoint for real-time progress."""
     # Don't overwrite the queue if start_pipeline already created one
     if session_id not in sse_queues:
-        sse_queues[session_id] = Queue(maxsize=200)
+        sse_queues[session_id] = Queue(maxsize=500)
 
     def generate():
         while True:
