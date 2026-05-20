@@ -1,0 +1,30 @@
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy project
+COPY . .
+
+# Environment
+ENV COQUI_TOS_AGREED=1
+ENV HF_HUB_DISABLE_SYMLINKS=1
+ENV PYTHONUNBUFFERED=1
+
+# Persistent volumes
+VOLUME ["/app/data"]
+
+EXPOSE 5000
+
+# Pre-download models on build, then start server
+CMD ["python", "server.py"]

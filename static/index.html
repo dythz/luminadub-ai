@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LuminaDub AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"on-surface":"#ecedf6","tertiary-dim":"#00bdeb","primary-fixed":"#00f9cc","surface-container-high":"#1c2028","surface-container-low":"#10131a","surface-container-lowest":"#000000","surface-container":"#161a21","background":"#0b0e14","outline":"#73757d","outline-variant":"#45484f","primary":"#b9ffe8","primary-dim":"#00e9bf","tertiary":"#67d7ff","on-surface-variant":"#a9abb3","on-primary-fixed":"#004436","error-container":"#9f0519","on-error-container":"#ffa8a3","surface-bright":"#282c36","surface-dim":"#0b0e14","secondary":"#ac8aff","secondary-dim":"#8455ef","secondary-container":"#5516be","error":"#ff716c"},fontFamily:{headline:["Manrope"],body:["Manrope"],label:["Space Grotesk"]}}}}
+</script>
+<style>
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}
+body{font-family:'Manrope',sans-serif;font-feature-settings:'cv02','cv03','cv04','cv11';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+.font-label{font-family:'Space Grotesk',monospace}
+.glass{background:rgba(38,38,39,0.6);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border:1px solid rgba(185,255,232,0.1);box-shadow:0 8px 32px rgba(0,0,0,0.3);transition:box-shadow .3s ease,border-color .3s ease}
+.glass:hover{border-color:rgba(185,255,232,0.2)}
+.inner-glow{box-shadow:inset 0 0 0 1px rgba(185,255,232,0.08)}
+.neon-glow{text-shadow:0 0 8px rgba(185,255,232,0.5)}
+.drop-over{border-color:#00e9bf!important;background:rgba(0,233,191,0.05)!important}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#161a21}::-webkit-scrollbar-thumb{background:#45484f;border-radius:3px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes pulse-glow{0%,100%{filter:drop-shadow(0 0 2px rgba(0,189,235,0.3))}50%{filter:drop-shadow(0 0 8px rgba(0,189,235,0.7))}}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.animate-spin{animation:spin 1s linear infinite,pulse-glow 2s ease-in-out infinite}
+.shimmer{position:relative;overflow:hidden}.shimmer::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent);animation:shimmer 2s infinite}
+#progressBar{transition:width .5s cubic-bezier(.4,0,.2,1)}
+.stage-bar div{transition:width .3s cubic-bezier(.4,0,.2,1)}
+.btn-glow{transition:transform .15s ease,box-shadow .3s ease}.btn-glow:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 0 60px rgba(0,255,209,0.4)}.btn-glow:active:not(:disabled){transform:translateY(0) scale(.98)}
+/* Toggle */
+.toggle-track{width:36px;height:20px;border-radius:10px;background:#1c2028;position:relative;cursor:pointer;transition:background .3s;border:1px solid rgba(69,72,79,0.3)}
+.toggle-track.active{background:rgba(0,233,191,0.2);border-color:rgba(0,233,191,0.4)}
+.toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#73757d;transition:transform .3s,background .3s}
+.toggle-track.active .toggle-knob{transform:translateX(16px);background:#00e9bf}
+/* Video player */
+.video-wrapper{position:relative;background:#000;border-radius:12px 12px 0 0;overflow:hidden}
+.video-wrapper video{display:block;width:100%}
+.video-controls{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.5) 50%,transparent 100%);padding:20px 20px 14px;opacity:0;transition:opacity .3s}
+.video-wrapper:hover .video-controls{opacity:1}
+.seek-bar{width:100%;height:4px;background:rgba(255,255,255,.12);border-radius:4px;cursor:pointer;margin-bottom:12px;transition:height .15s}
+.seek-bar:hover{height:6px}
+.seek-fill{height:100%;background:linear-gradient(90deg,#00e9bf,#67d7ff);border-radius:4px;position:relative;pointer-events:none}
+.seek-fill::after{content:'';position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:#00e9bf;border-radius:50%;opacity:0;transition:opacity .15s;box-shadow:0 0 8px rgba(0,233,191,0.6)}
+.seek-bar:hover .seek-fill::after{opacity:1}
+/* Queue items */
+.queue-item{transition:border-color .2s,opacity .2s}
+.queue-item:hover{border-color:rgba(185,255,232,0.25)}
+.queue-item[data-status="done"]{opacity:.6}
+.queue-item[data-status="queued"]{opacity:.5}
+</style>
+</head>
+<body class="bg-background text-on-surface h-screen overflow-hidden flex flex-col">
+
+<!-- Header -->
+<nav class="flex items-center justify-between px-6 h-14 bg-surface-dim border-b border-white/5 z-50 flex-shrink-0">
+<div class="flex items-center gap-3">
+<svg class="size-6 text-primary-dim" fill="none" viewBox="0 0 48 48"><path d="M6 6H42L36 24L42 42H6L12 24L6 6Z" fill="currentColor"/></svg>
+<span class="text-lg font-extrabold tracking-tight text-on-surface">LuminaDub AI</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-2 text-xs text-on-surface-variant font-label">
+<span class="size-1.5 bg-primary-dim rounded-full animate-pulse"></span>GPU ONLINE
+</span>
+<span id="headerStatus" class="px-2 py-0.5 rounded text-[10px] font-label font-bold uppercase tracking-wider bg-surface-container-high text-on-surface-variant">Aguardando</span>
+</div>
+</nav>
+
+<div class="flex flex-1 overflow-hidden">
+
+<!-- Main Content -->
+<main class="flex-1 flex flex-col overflow-y-auto p-6">
+<!-- Hero -->
+<div class="mb-6">
+<h1 class="text-3xl font-extrabold tracking-tight mb-1">Dublagem com <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-tertiary neon-glow">Inteligencia</span></h1>
+<p class="text-sm text-on-surface-variant font-label tracking-wide">TRANSFORME SEUS VIDEOS COM DUBLAGEM AUTOMATICA EN -> PT-BR</p>
+</div>
+
+<!-- Upload + Config Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+<!-- Upload Zone -->
+<div class="lg:col-span-2">
+<div class="glass rounded-xl overflow-hidden">
+<div id="dropZone" class="flex flex-col items-center justify-center p-6 m-4 border-2 border-dashed border-outline-variant/20 rounded-lg bg-surface-container-lowest/30 cursor-pointer hover:border-primary-dim/40 transition-colors">
+<div id="uploadIcon" class="size-12 bg-surface-container-high rounded-full flex items-center justify-center mb-2 inner-glow">
+<span class="material-symbols-outlined text-primary text-xl">cloud_upload</span>
+</div>
+<h3 class="text-base font-bold mb-0.5" id="uploadTitle">Arraste os videos aqui</h3>
+<p class="text-on-surface-variant text-xs font-label" id="uploadSubtitle">MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios</p>
+<p class="text-primary text-xs font-semibold mt-1 font-label" id="selectFileText">CLIQUE PARA SELECIONAR</p>
+</div>
+<input type="file" id="videoInput" accept=".mp4,.mov,.avi,.mkv,.webm" multiple style="position:fixed;top:-9999px;left:-9999px;opacity:0;width:1px;height:1px"/>
+<!-- File list -->
+<div id="fileList" class="hidden px-5 pb-2">
+<div class="flex items-center justify-between mb-1.5">
+<span class="text-[10px] font-label font-bold text-on-surface-variant uppercase tracking-widest" id="fileCount">0 videos</span>
+<button class="text-[10px] font-label text-error/70 hover:text-error transition-colors" onclick="clearFiles()">Limpar todos</button>
+</div>
+<div id="fileItems" class="space-y-1 max-h-28 overflow-y-auto"></div>
+</div>
+
+<!-- Config Row -->
+<div class="px-5 pb-5 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+<div class="space-y-1.5">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Tradutor</label>
+<div class="flex gap-1">
+<button id="btnOpus" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed" onclick="setTranslator('opus-mt')">Opus-MT</button>
+<button id="btnOllama" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors" onclick="setTranslator('ollama')">Ollama</button>
+</div>
+</div>
+<div id="ollamaGroup" class="space-y-1.5 hidden">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Modelo</label>
+<select id="ollamaModel" class="w-full h-8 bg-surface-container-lowest border border-outline-variant/40 rounded px-2 text-xs appearance-none"><option value="llama3.2">Llama 3.2</option><option value="qwen2.5:7b">Qwen 2.5</option></select>
+</div>
+<div class="space-y-1.5">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Motor de Voz</label>
+<div class="flex gap-1">
+<button id="btnXTTS" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed" onclick="setTTS('xtts')">XTTS</button>
+<button id="btnEdge" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors" onclick="setTTS('edge')">Edge-TTS</button>
+</div>
+</div>
+<div id="edgeVoiceGroup" class="space-y-1.5 hidden">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Voz</label>
+<select id="edgeVoice" class="w-full h-8 bg-surface-container-lowest border border-outline-variant/40 rounded px-2 text-xs appearance-none">
+<option value="pt-BR-ThalitaMultilingualNeural">Thalita</option>
+<option value="pt-BR-AntonioNeural">Antonio</option>
+<option value="pt-BR-FranciscaNeural">Francisca</option>
+<option value="pt-PT-DuarteNeural">Duarte</option>
+<option value="pt-PT-RaquelNeural">Raquel</option>
+</select>
+</div>
+<div class="space-y-1.5">
+<label class="text-on-surface-variant text-[9px] font-label font-bold uppercase tracking-widest">Separar Vocais</label>
+<div class="flex gap-1">
+<button id="btnVocalOn" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed" onclick="setVocal(true)">Sim</button>
+<button id="btnVocalOff" class="flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors" onclick="setVocal(false)">Nao</button>
+</div>
+</div>
+</div>
+
+<!-- Start Button -->
+<div class="px-5 pb-5 flex justify-end">
+<button id="startBtn" class="btn-glow flex items-center gap-2 px-7 py-3 bg-primary text-on-primary-fixed rounded-full font-extrabold text-base shadow-[0_0_40px_rgba(0,255,209,0.25)] disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+<span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1,'wght' 400">bolt</span>
+Iniciar Dublagem
+</button>
+</div>
+</div>
+</div>
+
+<!-- Pipeline Status -->
+<div class="lg:col-span-1">
+<div class="glass rounded-xl p-4 flex flex-col h-full">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-sm font-bold tracking-tight uppercase font-label">Pipeline</h3>
+<span id="progressPct" class="text-lg font-extrabold text-primary font-headline">0%</span>
+</div>
+<div id="stageList" class="space-y-2 flex-1">
+<div class="flex items-center gap-2.5 opacity-30" data-stage="extract"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Extrair Audio</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="separate"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Separar Vocais</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="transcribe"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Transcrever</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="translate"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Traduzir EN->PT</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="synthesize"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Sintetizar Voz</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="sync"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Sincronizar</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+<div class="flex items-center gap-2.5 opacity-30" data-stage="merge"><span class="material-symbols-outlined text-on-surface-variant" style="font-size:16px">radio_button_unchecked</span><div class="flex-1 min-w-0"><div class="flex items-center justify-between"><p class="text-xs font-semibold truncate">Mesclar Video</p><span class="stage-pct text-[9px] font-mono text-on-surface-variant ml-1 hidden">0%</span></div><div class="h-0.5 w-full bg-surface-container-high rounded-full mt-1 overflow-hidden hidden stage-bar"><div class="h-full bg-gradient-to-r from-primary-dim to-tertiary rounded-full" style="width:0%"></div></div></div></div>
+</div>
+<!-- Overall bar -->
+<div class="mt-4 pt-3 border-t border-white/5">
+<div class="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden"><div id="progressBar" class="h-full bg-gradient-to-r from-primary to-tertiary rounded-full shadow-[0_0_10px_rgba(0,255,209,0.4)]" style="width:0%"></div></div>
+<div class="flex justify-between mt-1.5 text-[10px] text-on-surface-variant font-label"><span id="elapsedTime">DECORRIDO: 0s</span><span id="etaTime">PREVISAO: --</span></div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Video Player (hidden until done) -->
+<section id="playerSection" class="mb-6 hidden">
+<div class="flex items-center justify-between mb-3">
+<h2 class="text-lg font-bold tracking-tight">Resultado</h2>
+<div class="flex items-center gap-2.5">
+<span class="text-xs text-on-surface-variant font-label">Legendas</span>
+<div id="subtitleToggle" class="toggle-track active" onclick="toggleSubtitles()"><div class="toggle-knob"></div></div>
+</div>
+</div>
+<div class="glass rounded-xl overflow-hidden">
+<div class="video-wrapper" id="videoWrapper">
+<video id="resultVideo" preload="metadata"><track id="subtitleTrack" kind="subtitles" srclang="pt" label="Portugues" default/></video>
+<div class="video-controls">
+<div class="seek-bar" id="seekBar"><div class="seek-fill" id="seekFill" style="width:0%"></div></div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<button id="playBtn" class="text-white hover:text-primary transition-colors" onclick="togglePlay()"><span class="material-symbols-outlined" style="font-size:26px">play_arrow</span></button>
+<div class="flex items-center gap-1.5 vol-group">
+<button id="muteBtn" class="text-white/60 hover:text-white transition-colors" onclick="toggleMute()"><span class="material-symbols-outlined" style="font-size:18px">volume_up</span></button>
+<input id="volumeSlider" type="range" min="0" max="1" step="0.05" value="1" class="w-0 hover:w-16 transition-all bg-white/15 h-0.5 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full" oninput="setVolume(this.value)"/>
+</div>
+<span id="timeDisplay" class="text-white/40 text-[10px] font-mono font-label ml-1">0:00 / 0:00</span>
+</div>
+<button id="fullscreenBtn" class="text-white/60 hover:text-white transition-colors" onclick="toggleFullscreen()"><span class="material-symbols-outlined" style="font-size:18px">fullscreen</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Downloads -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+<a id="dlVideo" href="#" download class="glass rounded-lg p-3 text-center hover:border-primary/30 transition-all group"><span class="material-symbols-outlined text-xl text-primary mb-1 group-hover:scale-110 transition-transform">movie</span><p class="text-[11px] font-semibold">Video Dublado</p></a>
+<a id="dlVideoSub" href="#" download class="glass rounded-lg p-3 text-center hover:border-primary/30 transition-all group"><span class="material-symbols-outlined text-xl text-secondary mb-1 group-hover:scale-110 transition-transform">subtitles</span><p class="text-[11px] font-semibold">SRT PT</p></a>
+<a id="dlPtSrt" href="#" download class="glass rounded-lg p-3 text-center hover:border-tertiary/30 transition-all group"><span class="material-symbols-outlined text-xl text-tertiary mb-1 group-hover:scale-110 transition-transform">description</span><p class="text-[11px] font-semibold">SRT EN</p></a>
+<a id="dlEnSrt" href="#" download class="glass rounded-lg p-3 text-center hover:border-tertiary/30 transition-all group"><span class="material-symbols-outlined text-xl text-on-surface-variant mb-1 group-hover:scale-110 transition-transform">download</span><p class="text-[11px] font-semibold">Download</p></a>
+</div>
+</section>
+</main>
+
+<!-- Right Sidebar: Queue -->
+<aside class="w-72 bg-surface-container-low border-l border-white/5 flex flex-col z-30 flex-shrink-0">
+<div class="p-4 border-b border-white/5 flex items-center justify-between">
+<h2 class="text-xs font-bold tracking-widest uppercase font-label">Fila de Processamento</h2>
+<span id="queueCount" class="bg-surface-container-high text-primary px-1.5 py-0.5 rounded text-[10px] font-label inner-glow">0</span>
+</div>
+<div id="queueList" class="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+<div class="text-center py-8 text-on-surface-variant text-xs font-label">Nenhum video na fila</div>
+</div>
+</aside>
+</div>
+
+<script>
+// ── STATE ──
+var videoFiles = []; // array of File objects
+var ttsEngine = 'xtts', vocalSeparation = true, translationEngine = 'opus-mt', processing = false;
+var subtitlesEnabled = true, resultFiles = {};
+var activeSessions = {};
+
+// ── UPLOAD ──
+var dropZone = document.getElementById('dropZone');
+var videoInput = document.getElementById('videoInput');
+dropZone.addEventListener('click', function(e){e.preventDefault();e.stopPropagation();videoInput.click()});
+dropZone.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();this.classList.add('drop-over')});
+dropZone.addEventListener('dragleave',function(e){e.preventDefault();e.stopPropagation();this.classList.remove('drop-over')});
+dropZone.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();this.classList.remove('drop-over');if(e.dataTransfer.files&&e.dataTransfer.files.length>0)addFiles(e.dataTransfer.files)});
+videoInput.addEventListener('change',function(){if(this.files&&this.files.length>0)addFiles(this.files);this.value=''});
+
+function addFiles(filesList){
+    for(var i=0;i<filesList.length;i++){
+        var file=filesList[i];
+        var ext=file.name.split('.').pop().toLowerCase();
+        if(['mp4','mov','avi','mkv','webm'].indexOf(ext)===-1){continue}
+        if(file.size>5*1024*1024*1024){continue}
+        // Avoid duplicates
+        var exists=false;
+        for(var j=0;j<videoFiles.length;j++){if(videoFiles[j].name===file.name&&videoFiles[j].size===file.size){exists=true;break}}
+        if(!exists) videoFiles.push(file);
+    }
+    renderFileList();
+}
+
+function removeFile(index){
+    videoFiles.splice(index,1);
+    renderFileList();
+}
+
+function clearFiles(){
+    videoFiles=[];
+    renderFileList();
+}
+
+function renderFileList(){
+    var list=document.getElementById('fileItems');
+    var countEl=document.getElementById('fileCount');
+    var fileListEl=document.getElementById('fileList');
+    var startBtn=document.getElementById('startBtn');
+    countEl.textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'');
+    if(videoFiles.length>0){
+        fileListEl.classList.remove('hidden');
+        startBtn.disabled=false;
+        list.innerHTML='';
+        videoFiles.forEach(function(f,i){
+            var div=document.createElement('div');
+            div.className='flex items-center gap-2 bg-surface-container-low rounded px-2 py-1.5 group';
+            div.innerHTML='<span class="material-symbols-outlined text-primary" style="font-size:14px">movie</span><span class="flex-1 text-[11px] font-label text-on-surface truncate">'+f.name+'</span><span class="text-[10px] font-label text-on-surface-variant">'+(f.size/1024/1024).toFixed(1)+'MB</span><button onclick="removeFile('+i+')" class="text-on-surface-variant hover:text-error transition-colors"><span class="material-symbols-outlined" style="font-size:14px">close</span></button>';
+            list.appendChild(div);
+        });
+        document.getElementById('uploadTitle').textContent=videoFiles.length+' video'+(videoFiles.length!==1?'s':'')+' selecionado'+(videoFiles.length!==1?'s':'');
+        document.getElementById('uploadSubtitle').textContent='Pronto para dublar';
+        document.getElementById('selectFileText').textContent='ADICIONAR MAIS';
+        var iconEl=document.querySelector('#uploadIcon .material-symbols-outlined');
+        iconEl.textContent='task_alt';iconEl.style.color='#00e9bf';
+    }else{
+        fileListEl.classList.add('hidden');
+        startBtn.disabled=true;
+        document.getElementById('uploadTitle').textContent='Arraste os videos aqui';
+        document.getElementById('uploadSubtitle').textContent='MP4, MOV, AVI, MKV, WEBM ate 5GB — selecione varios';
+        document.getElementById('selectFileText').textContent='CLIQUE PARA SELECIONAR';
+        var iconEl=document.querySelector('#uploadIcon .material-symbols-outlined');
+        iconEl.textContent='cloud_upload';iconEl.style.color='';
+    }
+}
+
+// ── TOGGLES ──
+function setTTS(e){
+    ttsEngine=e;
+    var on='flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed';
+    var off='flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors';
+    document.getElementById('btnXTTS').className=e==='xtts'?on:off;
+    document.getElementById('btnEdge').className=e==='edge'?on:off;
+    document.getElementById('edgeVoiceGroup').className=e==='edge'?'space-y-1.5':'space-y-1.5 hidden';
+}
+function setVocal(v){
+    vocalSeparation=v;
+    var on='flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed';
+    var off='flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors';
+    document.getElementById('btnVocalOn').className=v?on:off;
+    document.getElementById('btnVocalOff').className=!v?on:off;
+}
+function setTranslator(e){
+    translationEngine=e;
+    var on='flex-1 h-8 rounded font-label text-[11px] font-semibold bg-primary text-on-primary-fixed';
+    var off='flex-1 h-8 rounded font-label text-[11px] font-semibold bg-surface-container-lowest border border-outline-variant/40 text-on-surface-variant hover:bg-surface-container-high transition-colors';
+    document.getElementById('btnOpus').className=e==='opus-mt'?on:off;
+    document.getElementById('btnOllama').className=e==='ollama'?on:off;
+    document.getElementById('ollamaGroup').className=e==='ollama'?'space-y-1.5':'space-y-1.5 hidden';
+}
+
+// ── STAGE UPDATES ──
+function updateStage(stage,status,stageFrac){
+    var el=document.querySelector('[data-stage="'+stage+'"]');if(!el)return;
+    var icon=el.querySelector('.material-symbols-outlined'),pct=el.querySelector('.stage-pct'),bar=el.querySelector('.stage-bar'),barFill=bar?bar.querySelector('div'):null;
+    el.style.opacity='1';
+    if(status==='done'){icon.textContent='check_circle';icon.style.fontVariationSettings="'FILL' 1";icon.className='material-symbols-outlined';icon.style.color='#00e9bf';if(pct){pct.textContent='100%';pct.classList.remove('hidden');pct.style.color=''}if(bar)bar.classList.remove('hidden');if(barFill)barFill.style.width='100%'}
+    else if(status==='running'){icon.textContent='progress_activity';icon.className='material-symbols-outlined animate-spin';icon.style.color='#00bdeb';icon.style.fontVariationSettings='';if(pct)pct.classList.remove('hidden');if(bar)bar.classList.remove('hidden');if(stageFrac!==undefined&&pct)pct.textContent=Math.round(stageFrac*100)+'%';if(stageFrac!==undefined&&barFill)barFill.style.width=(stageFrac*100)+'%'}
+    else if(status==='error'){icon.textContent='cancel';icon.style.fontVariationSettings="'FILL' 1";icon.className='material-symbols-outlined';icon.style.color='#ff716c';if(pct){pct.textContent='ERRO';pct.classList.remove('hidden');pct.style.color='#ff716c'}}
+    else{icon.textContent='radio_button_unchecked';icon.className='material-symbols-outlined text-on-surface-variant';icon.style.color='';icon.style.fontVariationSettings='';el.style.opacity='0.3';if(pct)pct.classList.add('hidden');if(bar)bar.classList.add('hidden')}
+}
+function fmt(s){return s<60?Math.round(s)+'s':Math.floor(s/60)+'m'+Math.round(s%60)+'s'}
+function fmtTime(sec){var m=Math.floor(sec/60),s=Math.floor(sec%60);return m+':'+(s<10?'0':'')+s}
+
+// ── QUEUE UI ──
+function renderQueue(){
+    fetch('/api/jobs').then(r=>r.json()).then(data=>{
+        var jobs=data.jobs||[];
+        var list=document.getElementById('queueList');
+        document.getElementById('queueCount').textContent=jobs.filter(j=>j.status!=='done').length;
+        if(!jobs.length){list.innerHTML='<div class="text-center py-8 text-on-surface-variant text-xs font-label">Nenhum video na fila</div>';return}
+        list.innerHTML='';
+        jobs.forEach(function(j){
+            var pct=Math.round((j.progress||0)*100);
+            var div=document.createElement('div');
+            if(j.status==='running'){
+                div.className='queue-item bg-surface-container-high rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-primary';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined animate-spin text-primary" style="font-size:14px">progress_activity</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-primary px-1 py-0.5 rounded bg-primary/10">'+(j.stage||'Processando')+'</span><span class="text-[9px] font-label text-primary neon-glow">'+pct+'%</span></div><div class="w-full h-0.5 bg-surface-container rounded-full overflow-hidden"><div class="h-full bg-primary rounded-full shimmer" style="width:'+pct+'%"></div></div>';
+            } else if(j.status==='queued'){
+                var pos=0;
+                jobs.forEach(function(jj){if(jj.status==='running')pos++});
+                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-on-surface-variant/30 opacity-60';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-on-surface-variant" style="font-size:14px">schedule</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-on-surface-variant px-1 py-0.5 rounded bg-surface-container">NA FILA</span><span class="text-[9px] font-label text-on-surface-variant">Aguardando...</span></div>';
+            } else if(j.status==='done'){
+                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-secondary cursor-pointer hover:border-secondary/60 transition-all';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-secondary" style="font-size:14px">check_circle</span></div><div class="flex justify-between items-center"><span class="text-[9px] font-label text-secondary px-1 py-0.5 rounded bg-secondary/10 flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:10px">play_circle</span> ASSISTIR</span><span class="text-[9px] font-label text-secondary">100%</span></div>';
+                div.onclick=function(){loadResults(j.project_id)};
+            } else {
+                div.className='queue-item bg-surface-container rounded-lg p-3 flex flex-col gap-2 border-l-2 border-l-error opacity-50';
+                div.innerHTML='<div class="flex justify-between items-start"><span class="text-[11px] font-label text-on-surface-variant truncate pr-2">'+(j.filename||j.project_id)+'</span><span class="material-symbols-outlined text-error" style="font-size:14px">error</span></div>';
+            }
+            list.appendChild(div);
+        });
+    }).catch(function(){});
+}
+
+// ── START PIPELINE ──
+document.getElementById('startBtn').addEventListener('click',async function(){
+    if(!videoFiles.length){alert('Selecione pelo menos um video!');return}
+    var btn=this;
+    var filesToSend=[...videoFiles];
+    // Clear file list immediately
+    videoFiles=[];
+    renderFileList();
+
+    btn.disabled=true;
+    btn.innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> Enviando...';
+    setHeaderStatus('Enviando...','#00bdeb','rgba(0,189,235,0.1)');
+
+    for(var i=0;i<filesToSend.length;i++){
+        var file=filesToSend[i];
+        try{
+            var fd=new FormData();fd.append('video',file,file.name);
+            var up=await(await fetch('/api/upload',{method:'POST',body:fd})).json();
+            if(up.error){console.error('Upload error:',up.error);continue}
+            var pid=up.project_id;
+            var sid=pid+'-'+Date.now()+'-'+i;
+
+            var startData=await(await fetch('/api/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+                project_id:pid,session_id:sid,filename:file.name,
+                tts_engine:ttsEngine,translation_engine:translationEngine,
+                ollama_model:document.getElementById('ollamaModel').value,
+                edge_voice:document.getElementById('edgeVoice').value,vocal_separation:vocalSeparation
+            })})).json();
+            if(startData.error){console.error('Start error:',startData.error);continue}
+
+            activeSessions[sid]={projectId:pid,filename:file.name};
+            listenSSE(sid);
+        }catch(e){
+            console.error('Error sending file:',file.name,e);
+        }
+    }
+
+    renderQueue();
+    setHeaderStatus('Na fila','#00bdeb','rgba(0,189,235,0.1)');
+    btn.disabled=false;
+    btn.innerHTML='<span class="material-symbols-outlined" style="font-variation-settings:\'FILL\' 1,\'wght\' 400">bolt</span> Iniciar Dublagem';
+});
+
+function setHeaderStatus(text,color,bg){
+    var el=document.getElementById('headerStatus');
+    el.textContent=text;el.style.color=color;el.style.background=bg;
+}
+
+// ── SSE ──
+function listenSSE(sid){
+    var es=new EventSource('/api/events/'+sid);
+    es.addEventListener('queue',function(e){var d=JSON.parse(e.data);setHeaderStatus('Fila: posicao '+d.position,'#00bdeb','rgba(0,189,235,0.1)');renderQueue()});
+    es.addEventListener('queue_start',function(e){setHeaderStatus('Processando','#00bdeb','rgba(0,189,235,0.1)');renderQueue()});
+    es.addEventListener('stage_start',function(e){var d=JSON.parse(e.data);updateStage(d.stage,'running',0);renderQueue()});
+    es.addEventListener('progress',function(e){
+        var d=JSON.parse(e.data);var p=Math.round(d.frac*100);
+        document.getElementById('progressPct').textContent=p+'%';
+        document.getElementById('progressBar').style.width=p+'%';
+        if(d.elapsed)document.getElementById('elapsedTime').textContent='DECORRIDO: '+fmt(d.elapsed);
+        if(d.eta&&d.eta>0)document.getElementById('etaTime').textContent='PREVISAO: '+fmt(d.eta);
+        if(d.stage&&d.stage_frac!==undefined)updateStage(d.stage,'running',d.stage_frac);
+        renderQueue();
+    });
+    es.addEventListener('stage_done',function(e){var d=JSON.parse(e.data);updateStage(d.stage,'done');renderQueue()});
+    es.addEventListener('stage_error',function(e){var d=JSON.parse(e.data);updateStage(d.stage,'error');setHeaderStatus('Erro: '+d.display,'#ff716c','rgba(159,5,25,0.3)')});
+    es.addEventListener('done',async function(e){
+        var d=JSON.parse(e.data);
+        setHeaderStatus('Concluido!','#00e9bf','rgba(0,233,191,0.1)');
+        document.getElementById('progressPct').textContent='100%';
+        document.getElementById('progressBar').style.width='100%';
+        document.getElementById('elapsedTime').textContent='TOTAL: '+fmt(d.total_time);
+        es.close();
+        loadResults(d.project_id||projectId);
+        renderQueue();
+    });
+    es.addEventListener('error',function(){setHeaderStatus('Conexao perdida','#ff716c','rgba(159,5,25,0.3)');es.close()});
+}
+
+// ── LOAD RESULTS ──
+async function loadResults(pid){
+    try{
+        var data=await(await fetch('/api/result/'+pid)).json();
+        resultFiles=data.files||{};
+        document.getElementById('playerSection').classList.remove('hidden');
+        var videoEl=document.getElementById('resultVideo');
+        if(resultFiles.video)videoEl.src=resultFiles.video;
+        var track=document.getElementById('subtitleTrack');
+        if(resultFiles.pt_vtt){track.src=resultFiles.pt_vtt;track.mode=subtitlesEnabled?'showing':'hidden'}
+        if(resultFiles.video)document.getElementById('dlVideo').href=resultFiles.video;
+        if(resultFiles.pt_srt)document.getElementById('dlVideoSub').href=resultFiles.pt_srt;
+        if(resultFiles.en_srt)document.getElementById('dlEnSrt').href=resultFiles.en_srt;
+        if(resultFiles.pt_srt)document.getElementById('dlPtSrt').href=resultFiles.pt_srt;
+        setupVideoPlayer(videoEl);
+        document.getElementById('playerSection').scrollIntoView({behavior:'smooth'});
+    }catch(e){console.error('Error loading results:',e)}
+}
+
+// ── VIDEO PLAYER ──
+function setupVideoPlayer(v){
+    v.addEventListener('play',function(){document.querySelector('#playBtn .material-symbols-outlined').textContent='pause'});
+    v.addEventListener('pause',function(){document.querySelector('#playBtn .material-symbols-outlined').textContent='play_arrow'});
+    v.addEventListener('timeupdate',function(){
+        var pct=v.duration?(v.currentTime/v.duration*100):0;
+        document.getElementById('seekFill').style.width=pct+'%';
+        document.getElementById('timeDisplay').textContent=fmtTime(v.currentTime)+' / '+fmtTime(v.duration||0);
+    });
+    document.getElementById('seekBar').addEventListener('click',function(e){var rect=this.getBoundingClientRect();v.currentTime=((e.clientX-rect.left)/rect.width)*v.duration});
+    v.volume=1;
+}
+function togglePlay(){var v=document.getElementById('resultVideo');if(v.paused)v.play();else v.pause()}
+function toggleMute(){var v=document.getElementById('resultVideo');v.muted=!v.muted;document.querySelector('#muteBtn .material-symbols-outlined').textContent=v.muted?'volume_off':'volume_up'}
+function setVolume(val){document.getElementById('resultVideo').volume=val;document.querySelector('#muteBtn .material-symbols-outlined').textContent=val==0?'volume_off':'volume_up'}
+function toggleFullscreen(){var w=document.getElementById('videoWrapper');if(document.fullscreenElement)document.exitFullscreen();else w.requestFullscreen()}
+function toggleSubtitles(){
+    subtitlesEnabled=!subtitlesEnabled;
+    var toggle=document.getElementById('subtitleToggle'),track=document.getElementById('subtitleTrack');
+    if(subtitlesEnabled){toggle.classList.add('active');if(track.src)track.mode='showing'}
+    else{toggle.classList.remove('active');if(track.src)track.mode='hidden'}
+}
+
+// ── QUEUE POLL ──
+setInterval(renderQueue,3000);
+renderQueue();
+</script>
+</body>
+</html>
