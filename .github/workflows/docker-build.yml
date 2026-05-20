@@ -3,13 +3,24 @@ name: Build & Push Docker Image
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:  # permite rodar manualmente pelo GitHub
+  workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Liberar espaco em disco
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout do repositorio
         uses: actions/checkout@v4
 
