@@ -42,7 +42,9 @@ RUN pip install --no-cache-dir --ignore-installed \
     "blinker>=1.9.0" \
     "flask>=2.0.0" \
     "flask-cors>=3.0.0" \
-    "waitress>=2.1.0"
+    "waitress>=2.1.0" \
+    "gunicorn>=21.0.0" \
+    "gevent>=23.0.0"
 
 # Gradio opcional
 RUN python3 -m pip install --no-cache-dir --break-system-packages "gradio==4.44.1" || \

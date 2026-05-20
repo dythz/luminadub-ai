@@ -1,5 +1,13 @@
 """Flask server with SSE for real-time pipeline progress."""
 
+# gevent monkey-patch must be first — makes Queue.get() and socket I/O non-blocking
+# so SSE streams yield to other greenlets instead of holding OS threads.
+try:
+    from gevent import monkey as _monkey
+    _monkey.patch_all()
+except ImportError:
+    pass
+
 import asyncio
 import json
 import logging
@@ -525,9 +533,33 @@ if __name__ == "__main__":
     print("  |     http://localhost:5000            |")
     print("  +======================================+\n")
     try:
-        from waitress import serve as waitress_serve
-        print("  Using waitress (production WSGI server)")
-        waitress_serve(app, host="0.0.0.0", port=5000, threads=16, max_request_body_size=10*1024*1024*1024)
+        import gunicorn.app.base
+
+        class _StandaloneApp(gunicorn.app.base.BaseApplication):
+            def __init__(self, application, options=None):
+                self.options = options or {}
+                self.application = application
+                super().__init__()
+            def load_config(self):
+                for key, val in self.options.items():
+                    self.cfg.set(key.lower(), val)
+            def load(self):
+                return self.application
+
+        print("  Using gunicorn + gevent (async SSE — no thread exhaustion)")
+        _StandaloneApp(app, {
+            "bind": "0.0.0.0:5000",
+            "worker_class": "gevent",
+            "workers": 1,
+            "worker_connections": 1000,
+            "timeout": 120,
+            "keepalive": 5,
+        }).run()
     except ImportError:
-        print("  Using Flask dev server (install waitress for stability)")
-        app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+        try:
+            from waitress import serve as waitress_serve
+            print("  Using waitress (install gunicorn+gevent for better SSE scalability)")
+            waitress_serve(app, host="0.0.0.0", port=5000, threads=16, max_request_body_size=10*1024*1024*1024)
+        except ImportError:
+            print("  Using Flask dev server (install waitress or gunicorn+gevent)")
+            app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
