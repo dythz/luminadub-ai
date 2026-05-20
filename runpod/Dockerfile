@@ -11,8 +11,37 @@ WORKDIR /app
 
 # Python deps (torch/torchaudio ja estao na imagem base)
 COPY requirements.txt .
-RUN grep -vE "^(torch|torchaudio|#)" requirements.txt > /tmp/requirements-filtered.txt && \
-    pip install --no-cache-dir -r /tmp/requirements-filtered.txt
+
+# Grupo 1: ML core
+RUN pip install --no-cache-dir \
+    "faster-whisper>=1.0.0" \
+    "transformers>=4.50.0" \
+    "sentencepiece>=0.2.0" \
+    "sacremoses>=0.1.0"
+
+# Grupo 2: Audio separation
+RUN pip install --no-cache-dir \
+    "demucs>=4.0.0"
+
+# Grupo 3: TTS
+RUN pip install --no-cache-dir \
+    "coqui-tts>=0.27.0" \
+    "edge-tts>=6.0.0"
+
+# Grupo 4: Web UI
+RUN pip install --no-cache-dir \
+    "gradio>=5.0.0" \
+    "flask>=2.0.0" \
+    "flask-cors>=3.0.0" \
+    "waitress>=2.1.0"
+
+# Grupo 5: Utilities
+RUN pip install --no-cache-dir \
+    "soundfile>=0.12.0" \
+    "numpy>=1.24.0" \
+    "audiostretchy>=1.2.0" \
+    "psutil>=5.9.0" \
+    "pysubs2>=1.7.0"
 
 # Copy project
 COPY . .
