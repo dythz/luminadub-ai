@@ -33,6 +33,13 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages \
     "coqui-tts>=0.27.0" \
     "edge-tts>=6.0.0"
 
+# Patch coqui-tts: corrige incompatibilidade com transformers>=4.46 (isin_mps_friendly removido)
+RUN python3 -c "\
+import glob; \
+files = glob.glob('/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py'); \
+[open(f,'w').write(open(f).read().replace('from transformers.pytorch_utils import isin_mps_friendly as isin','import torch; isin = torch.isin')) for f in files]; \
+print('Tortoise patch applied to', len(files), 'file(s)')"
+
 # Grupo 4: Web UI (--ignore-installed por causa do blinker instalado pelo apt)
 RUN pip install --no-cache-dir --ignore-installed \
     "blinker>=1.9.0" \

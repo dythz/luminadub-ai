@@ -1,13 +1,17 @@
+import os
 from pathlib import Path
 from dataclasses import dataclass, field
+
+# Auto-detect base directory: use APP_BASE_DIR env var, or the directory of this file
+_BASE = Path(os.environ.get("APP_BASE_DIR", str(Path(__file__).parent)))
 
 
 @dataclass
 class Config:
     # Paths
-    BASE_DIR: Path = Path("D:/AI DUBBING")
-    PROJECTS_DIR: Path = Path("D:/AI DUBBING/data/projects")
-    MODEL_CACHE_DIR: Path = Path("D:/AI DUBBING/data/models")
+    BASE_DIR: Path = _BASE
+    PROJECTS_DIR: Path = _BASE / "data" / "projects"
+    MODEL_CACHE_DIR: Path = _BASE / "data" / "models"
 
     # GPU
     DEVICE: str = "cuda"
