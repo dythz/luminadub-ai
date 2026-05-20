@@ -313,16 +313,20 @@ def upload_chunk():
     chunk.save(str(chunk_path))
     logger.info(f"[UPLOAD] Chunk {chunk_index+1}/{total_chunks} for {filename} (project {project_id})")
 
-    received = len(list(chunks_dir.glob("chunk_*")))
-    if received >= total_chunks:
+    # Check all specific chunk files exist (count alone can race with parallel uploads)
+    all_present = received >= total_chunks and all(
+        (chunks_dir / f"chunk_{i:05d}").exists() for i in range(total_chunks)
+    )
+    if all_present:
         dest = project_dir / "input" / filename
-        with open(str(dest), "wb") as out:
-            for i in range(total_chunks):
-                cp = chunks_dir / f"chunk_{i:05d}"
-                with open(str(cp), "rb") as cf:
-                    out.write(cf.read())
-        shutil.rmtree(str(chunks_dir))
-        logger.info(f"[UPLOAD] Assembled {filename} ({dest.stat().st_size // 1024 // 1024} MB)")
+        if not dest.exists():  # prevent double-assembly if two chunks finish simultaneously
+            with open(str(dest), "wb") as out:
+                for i in range(total_chunks):
+                    cp = chunks_dir / f"chunk_{i:05d}"
+                    with open(str(cp), "rb") as cf:
+                        out.write(cf.read())
+            shutil.rmtree(str(chunks_dir))
+            logger.info(f"[UPLOAD] Assembled {filename} ({dest.stat().st_size // 1024 // 1024} MB)")
         return jsonify({"project_id": project_id, "filename": filename, "complete": True})
 
     return jsonify({"project_id": project_id, "chunk_index": chunk_index, "received": received, "complete": False})

@@ -367,25 +367,55 @@ function renderQueue(){
 
 // ── CHUNKED UPLOAD ──
 async function uploadInChunks(file, fileIdx, totalFiles){
-    var CHUNK=5*1024*1024; // 5 MB per chunk — stays under RunPod proxy limits
+    var CHUNK=10*1024*1024; // 10 MB per chunk
+    var PARALLEL=4;         // 4 simultaneous uploads
+    var MAX_RETRY=3;
     var total=Math.ceil(file.size/CHUNK);
     var projectId=null;
-    for(var i=0;i<total;i++){
+    var completed=0;
+
+    function updateBtn(){
+        var pct=Math.round(completed/total*100);
+        document.getElementById('startBtn').innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> '+(fileIdx+1)+'/'+totalFiles+' — '+pct+'%';
+    }
+
+    async function sendChunk(i,pid){
         var chunk=file.slice(i*CHUNK,Math.min((i+1)*CHUNK,file.size));
         var fd=new FormData();
         fd.append('chunk',chunk,file.name);
         fd.append('chunk_index',i);
         fd.append('total_chunks',total);
         fd.append('filename',file.name);
-        if(projectId)fd.append('project_id',projectId);
-        var pct=Math.round((i+1)/total*100);
-        document.getElementById('startBtn').innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> '+(fileIdx+1)+'/'+totalFiles+' — '+pct+'%';
-        var resp=await fetch('/api/upload/chunk',{method:'POST',body:fd});
-        if(!resp.ok){var t=await resp.text();throw new Error('Chunk '+i+' failed: '+resp.status+' '+t)}
-        var data=await resp.json();
-        if(data.error)throw new Error(data.error);
-        projectId=data.project_id;
+        if(pid)fd.append('project_id',pid);
+        for(var attempt=0;attempt<MAX_RETRY;attempt++){
+            try{
+                var resp=await fetch('/api/upload/chunk',{method:'POST',body:fd});
+                if(!resp.ok){var t=await resp.text();throw new Error('HTTP '+resp.status+': '+t)}
+                var data=await resp.json();
+                if(data.error)throw new Error(data.error);
+                return data;
+            }catch(e){
+                if(attempt===MAX_RETRY-1)throw e;
+                await new Promise(function(r){setTimeout(r,1000*(attempt+1));});
+            }
+        }
     }
+
+    // Chunk 0 first — establishes project_id
+    var d0=await sendChunk(0,null);
+    projectId=d0.project_id;
+    completed=1;
+    updateBtn();
+
+    // Remaining chunks in parallel batches
+    for(var batch=1;batch<total;batch+=PARALLEL){
+        var indices=[];
+        for(var j=batch;j<Math.min(batch+PARALLEL,total);j++)indices.push(j);
+        await Promise.all(indices.map(function(idx){
+            return sendChunk(idx,projectId).then(function(){completed++;updateBtn();});
+        }));
+    }
+
     return{project_id:projectId,filename:file.name};
 }
 
