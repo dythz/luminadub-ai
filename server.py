@@ -22,7 +22,6 @@ if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
 
 from config import Config
 from pipeline import DubbingPipeline
-import worker as _worker_module
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("server")
@@ -84,6 +83,7 @@ class JobQueue:
                 self._active["stage"] = stage
 
     def _execute(self, job: dict):
+        import worker as _worker_module
         ctx = mp.get_context("spawn")
         event_queue = ctx.Queue()
         p = ctx.Process(
