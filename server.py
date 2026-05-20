@@ -3,12 +3,13 @@
 import asyncio
 import json
 import logging
+import multiprocessing as mp
 import os
 import time
 import uuid
 from pathlib import Path
 from queue import Queue
-from threading import Thread, Lock, Condition
+from threading import Thread, Lock
 
 from flask import Flask, request, jsonify, Response, send_file, send_from_directory
 from flask_cors import CORS
@@ -21,6 +22,7 @@ if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
 
 from config import Config
 from pipeline import DubbingPipeline
+import worker as _worker_module
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("server")
@@ -39,7 +41,10 @@ sse_queues: dict[str, Queue] = {}
 # ── Job Queue ─────────────────────────────────────────────────────────
 
 class JobQueue:
-    """In-memory FIFO queue that serializes GPU pipeline execution."""
+    """FIFO queue that runs each video pipeline in an isolated subprocess.
+    If the GPU crashes in one job, only that subprocess dies — the server keeps running."""
+
+    MAX_JOB_SECONDS = 7200  # 2 hour hard limit per job
 
     def __init__(self):
         self._lock = Lock()
@@ -48,7 +53,7 @@ class JobQueue:
         self._done: list[dict] = []
         self._counter = 0
 
-    def enqueue(self, session_id: str, project_id: str, filename: str, run_fn) -> int:
+    def enqueue(self, session_id: str, project_id: str, filename: str, config_overrides: dict) -> int:
         with self._lock:
             self._counter += 1
             job = {
@@ -56,7 +61,7 @@ class JobQueue:
                 "session_id": session_id,
                 "project_id": project_id,
                 "filename": filename,
-                "run_fn": run_fn,
+                "config_overrides": config_overrides,
                 "status": "queued",
                 "progress": 0.0,
                 "stage": "",
@@ -66,12 +71,11 @@ class JobQueue:
                 self._active = job
                 job["status"] = "running"
                 job["started_at"] = time.time()
-                position = 0
                 Thread(target=self._execute, args=(job,), daemon=True).start()
+                return 0
             else:
                 self._queue.append(job)
-                position = len(self._queue)
-            return position
+                return len(self._queue)
 
     def update_job(self, session_id: str, progress: float, stage: str):
         with self._lock:
@@ -80,26 +84,70 @@ class JobQueue:
                 self._active["stage"] = stage
 
     def _execute(self, job: dict):
+        ctx = mp.get_context("spawn")
+        event_queue = ctx.Queue()
+        p = ctx.Process(
+            target=_worker_module.run,
+            args=(job["project_id"], job["session_id"], job["config_overrides"], event_queue),
+            daemon=False,
+        )
+        p.start()
+        logger.info(f"[WORKER] PID {p.pid} started for job {job['id']} ({job['filename']})")
+        job_start = time.time()
+
         try:
-            job["run_fn"]()
+            while True:
+                # Hard timeout
+                if time.time() - job_start > self.MAX_JOB_SECONDS:
+                    logger.error(f"[WORKER] Job {job['id']} timed out, killing PID {p.pid}")
+                    p.terminate()
+                    p.join(timeout=10)
+                    if p.is_alive():
+                        p.kill()
+                    sse_send(job["session_id"], "error", {"message": "Job atingiu limite de 2 horas e foi cancelado."})
+                    break
+
+                p.join(timeout=0)
+                if not p.is_alive():
+                    # Drain remaining events
+                    while not event_queue.empty():
+                        try:
+                            sid, event, data = event_queue.get_nowait()
+                            self.update_job(sid, data.get("frac", 0), data.get("desc", ""))
+                            sse_send(sid, event, data)
+                        except Exception:
+                            pass
+                    if p.exitcode not in (0, None):
+                        logger.error(f"[WORKER] PID {p.pid} crashed with exit code {p.exitcode}")
+                        sse_send(job["session_id"], "error", {
+                            "message": f"GPU travou (exit {p.exitcode}). Tente reenviar o video."
+                        })
+                    break
+
+                # Forward progress events
+                try:
+                    sid, event, data = event_queue.get(timeout=0.5)
+                    self.update_job(sid, data.get("frac", 0), data.get("desc", ""))
+                    sse_send(sid, event, data)
+                except Exception:
+                    pass
+
+        except Exception as e:
+            logger.exception(f"[WORKER] Error managing subprocess: {e}")
+            if p.is_alive():
+                p.terminate()
+                p.join(timeout=10)
         finally:
-            # Force garbage collection between jobs to free GPU/CPU memory
-            import gc
-            gc.collect()
-            try:
-                import torch
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                    torch.cuda.synchronize()
-            except Exception:
-                pass
+            if p.is_alive():
+                p.kill()
+                p.join(timeout=5)
+
             with self._lock:
                 job["status"] = "done"
                 self._done.append(job)
                 if len(self._done) > 20:
                     self._done = self._done[-20:]
                 self._active = None
-                # Clean up SSE queue for completed job to avoid memory leak
                 sse_queues.pop(job["session_id"], None)
                 if self._queue:
                     next_job = self._queue.pop(0)
@@ -219,128 +267,33 @@ def start_pipeline():
 
     session_id = data.get("session_id", project_id)
     filename = data.get("filename", "video")
-    config = Config()
-    config.ensure_dirs()
 
-    # Apply settings from request
-    config.enable_vocal_separation = data.get("vocal_separation", True)
-    config.tts_engine = data.get("tts_engine", "xtts")
-    config.TRANSLATION_ENGINE = data.get("translation_engine", "opus-mt")
-    config.OLLAMA_MODEL = data.get("ollama_model", "llama3.2")
-    config.EDGE_TTS_VOICE = data.get("edge_voice", "pt-BR-ThalitaMultilingualNeural")
-    config.BACKGROUND_VOLUME = float(data.get("bg_volume", 0.7))
-    config.DUB_VOLUME = float(data.get("dub_volume", 1.0))
-    config.MAX_SPEED_RATIO = float(data.get("max_speed", 1.5))
-    config.STRETCH_METHOD = data.get("stretch_method", "atempo")
-    config.WORDS_PER_CUE = int(data.get("words_per_cue", 7))
-    config.MAX_WORDS_PER_CUE = max(config.MAX_WORDS_PER_CUE, config.WORDS_PER_CUE)
-    config.MAX_CHARS_PER_CUE = int(data.get("max_chars_per_cue", 45))
-    config.MIN_CUE_DURATION = float(data.get("min_cue_duration", 1.0))
-    config.MIN_CUE_GAP = float(data.get("min_cue_gap", 0.08))
-    config.MAX_CUE_DURATION = float(data.get("max_cue_duration", 10.0))
-
-    reference_audio = data.get("reference_audio")
-    if reference_audio:
-        config.reference_audio_path = reference_audio
+    words_per_cue = int(data.get("words_per_cue", 7))
+    config_overrides = {
+        "enable_vocal_separation": data.get("vocal_separation", True),
+        "tts_engine": data.get("tts_engine", "xtts"),
+        "TRANSLATION_ENGINE": data.get("translation_engine", "opus-mt"),
+        "OLLAMA_MODEL": data.get("ollama_model", "llama3.2"),
+        "EDGE_TTS_VOICE": data.get("edge_voice", "pt-BR-ThalitaMultilingualNeural"),
+        "BACKGROUND_VOLUME": float(data.get("bg_volume", 0.7)),
+        "DUB_VOLUME": float(data.get("dub_volume", 1.0)),
+        "MAX_SPEED_RATIO": float(data.get("max_speed", 1.5)),
+        "STRETCH_METHOD": data.get("stretch_method", "atempo"),
+        "WORDS_PER_CUE": words_per_cue,
+        "MAX_WORDS_PER_CUE": max(int(data.get("max_words_per_cue", 10)), words_per_cue),
+        "MAX_CHARS_PER_CUE": int(data.get("max_chars_per_cue", 45)),
+        "MIN_CUE_DURATION": float(data.get("min_cue_duration", 1.0)),
+        "MIN_CUE_GAP": float(data.get("min_cue_gap", 0.08)),
+        "MAX_CUE_DURATION": float(data.get("max_cue_duration", 10.0)),
+    }
+    if data.get("reference_audio"):
+        config_overrides["reference_audio_path"] = data["reference_audio"]
 
     # Set up SSE queue
-    q = Queue(maxsize=200)
+    q = Queue(maxsize=500)
     sse_queues[session_id] = q
 
-    def run_pipeline():
-        try:
-            pipeline = DubbingPipeline(project_id=project_id, config=config)
-            project_dir = CONFIG.PROJECTS_DIR / project_id
-            video_files = list((project_dir / "input").glob("*"))
-            if not video_files:
-                sse_send(session_id, "error", {"message": "No video found in input/"})
-                return
-
-            video_path = str(video_files[0])
-            pipeline.setup_project(video_path)
-
-            stage_names = {
-                "extract": "Extrair Audio", "separate": "Separar Vocais",
-                "transcribe": "Transcrever", "translate": "Traduzir",
-                "synthesize": "Sintetizar Voz", "sync": "Sincronizar", "merge": "Mesclar Video",
-            }
-
-            # Custom run with per-stage SSE events
-            completed = pipeline.state.completed_stages
-            stages_to_run = [s for s in config.STAGE_ORDER if s not in completed]
-            if not config.enable_vocal_separation and "separate" in stages_to_run:
-                stages_to_run.remove("separate")
-
-            start_time = time.time()
-
-            for stage_name in stages_to_run:
-                display = stage_names.get(stage_name, stage_name)
-                sse_send(session_id, "stage_start", {
-                    "stage": stage_name, "display": display,
-                    "stages_done": len(pipeline.state.completed_stages),
-                    "stages_total": len(stages_to_run),
-                })
-
-                pipeline.state.mark_running(stage_name)
-                from pipeline import STAGE_FUNCTIONS
-
-                def stage_progress(frac, desc=""):
-                    total_stages = len(stages_to_run)
-                    done = len(pipeline.state.completed_stages)
-                    overall = (done + frac) / total_stages
-                    elapsed = time.time() - start_time
-                    eta = (elapsed / max(overall, 0.01)) * (1 - overall) if overall > 0.05 else 0
-                    job_queue.update_job(session_id, overall, display)
-                    sse_send(session_id, "progress", {
-                        "frac": round(overall, 4),
-                        "stage_frac": round(frac, 4),
-                        "desc": f"{display}: {desc}" if desc else display,
-                        "elapsed": round(elapsed, 1),
-                        "eta": round(max(eta, 0), 1),
-                        "stage": stage_name,
-                    })
-
-                stage_fn = STAGE_FUNCTIONS[stage_name]
-                result = stage_fn(pipeline.project_dir, config, progress=stage_progress)
-
-                if result.success:
-                    pipeline.state.mark_completed(stage_name, metadata=result.metadata or {})
-                    stage_time = time.time() - start_time
-                    sse_send(session_id, "stage_done", {
-                        "stage": stage_name, "display": display,
-                        "warnings": result.metadata.get("warnings", []) if result.metadata else [],
-                        "elapsed_total": round(stage_time, 1),
-                    })
-                else:
-                    pipeline.state.mark_error(stage_name, result.error or "Unknown error")
-                    sse_send(session_id, "stage_error", {
-                        "stage": stage_name, "display": display,
-                        "error": result.error or "Unknown error",
-                    })
-                    return
-
-            total_time = time.time() - start_time
-
-            # Include output files in done event
-            output_dir = CONFIG.PROJECTS_DIR / project_id / "output"
-            result_files = {}
-            if output_dir.exists():
-                for f in output_dir.iterdir():
-                    if f.is_file():
-                        result_files[f.name] = f"/api/file/{project_id}/{f.name}"
-
-            sse_send(session_id, "done", {
-                "total_time": round(total_time, 1),
-                "project_id": project_id,
-                "files": result_files,
-            })
-
-        except Exception as e:
-            logger.exception("Pipeline error")
-            sse_send(session_id, "error", {"message": str(e)})
-
-    # Enqueue instead of spawning directly
-    position = job_queue.enqueue(session_id, project_id, filename, run_pipeline)
+    position = job_queue.enqueue(session_id, project_id, filename, config_overrides)
 
     result = {"status": "started", "project_id": project_id}
     if position > 0:
