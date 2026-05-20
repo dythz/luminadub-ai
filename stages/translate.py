@@ -46,43 +46,46 @@ def _translate_opus(config, en_cues, pt_srt_path, progress):
     logger.info(f"[TRANSLATE] Opus-MT loaded in {t_load:.1f}s")
 
     total = len(en_cues)
-    if progress:
-        progress(0.10, desc=f"Translating {total} cues (batch 8)...")
-
     pt_cues = []
     batch_size = 8
     t_translate_start = time.time()
 
-    for i in range(0, total, batch_size):
-        batch = en_cues[i: i + batch_size]
-        texts = [c.text for c in batch]
-        t_batch = time.time()
-        translations = wrapper.translate(texts)
-        batch_time = time.time() - t_batch
-
-        for en_cue, pt_text in zip(batch, translations):
-            pt_text = pt_text.strip().rstrip(".,;:")
-            pt_cues.append(SRTCue(
-                index=en_cue.index,
-                start=en_cue.start,
-                end=en_cue.end,
-                text=pt_text,
-            ))
-
-        done = min(i + batch_size, total)
-        pct = done / total * 100
-        elapsed = time.time() - t_translate_start
-        avg = elapsed / done
-        remaining = avg * (total - done)
-        logger.info(
-            f"[TRANSLATE] Opus-MT {done}/{total} ({pct:.0f}%) | "
-            f"batch {len(batch)} cues in {batch_time:.2f}s | "
-            f"elapsed {elapsed:.1f}s | ETA {remaining:.1f}s"
-        )
-
+    try:
         if progress:
-            frac = 0.10 + 0.85 * (done / total)
-            progress(frac, desc=f"Opus-MT {done}/{total} ({pct:.0f}%) | {elapsed:.1f}s | ETA {remaining:.0f}s")
+            progress(0.10, desc=f"Translating {total} cues (batch 8)...")
+
+        for i in range(0, total, batch_size):
+            batch = en_cues[i: i + batch_size]
+            texts = [c.text for c in batch]
+            t_batch = time.time()
+            translations = wrapper.translate(texts)
+            batch_time = time.time() - t_batch
+
+            for en_cue, pt_text in zip(batch, translations):
+                pt_text = pt_text.strip().rstrip(".,;:")
+                pt_cues.append(SRTCue(
+                    index=en_cue.index,
+                    start=en_cue.start,
+                    end=en_cue.end,
+                    text=pt_text,
+                ))
+
+            done = min(i + batch_size, total)
+            pct = done / total * 100
+            elapsed = time.time() - t_translate_start
+            avg = elapsed / done
+            remaining = avg * (total - done)
+            logger.info(
+                f"[TRANSLATE] Opus-MT {done}/{total} ({pct:.0f}%) | "
+                f"batch {len(batch)} cues in {batch_time:.2f}s | "
+                f"elapsed {elapsed:.1f}s | ETA {remaining:.1f}s"
+            )
+
+            if progress:
+                frac = 0.10 + 0.85 * (done / total)
+                progress(frac, desc=f"Opus-MT {done}/{total} ({pct:.0f}%) | {elapsed:.1f}s | ETA {remaining:.0f}s")
+    finally:
+        wrapper.unload()
 
     write_srt(pt_cues, pt_srt_path)
     t_total = time.time() - t_translate_start
@@ -91,7 +94,6 @@ def _translate_opus(config, en_cues, pt_srt_path, progress):
         f"[TRANSLATE] Opus-MT done: {total} cues in {t_total:.1f}s "
         f"({avg_per_cue:.2f}s/cue avg) -> {pt_srt_path}"
     )
-    wrapper.unload()
 
     if progress:
         progress(1.0, desc=f"Translation done: {total} cues in {t_total:.1f}s ({avg_per_cue:.2f}s/cue)")

@@ -99,6 +99,8 @@ class JobQueue:
                 if len(self._done) > 20:
                     self._done = self._done[-20:]
                 self._active = None
+                # Clean up SSE queue for completed job to avoid memory leak
+                sse_queues.pop(job["session_id"], None)
                 if self._queue:
                     next_job = self._queue.pop(0)
                     self._active = next_job

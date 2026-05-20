@@ -37,7 +37,7 @@ class GPUManager:
             result = subprocess.run(
                 ["nvidia-smi", "--query-gpu=memory.used,memory.total",
                  "--format=csv,noheader,nounits"],
-                capture_output=True, text=True,
+                capture_output=True, text=True, errors='replace', timeout=10,
             )
             parts = result.stdout.strip().split(", ")
             used = int(parts[0])

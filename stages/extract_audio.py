@@ -25,21 +25,25 @@ def extract_audio(project_dir: Path, config: Config, progress=None) -> StageResu
         if progress:
             progress(0.3, desc="Extracting audio for Whisper (16kHz mono)...")
 
-        subprocess.run([
+        r = subprocess.run([
             "ffmpeg", "-y", "-i", str(video_path),
             "-ar", "16000", "-ac", "1", "-acodec", "pcm_s16le",
             str(whisper_audio),
-        ], capture_output=True, check=True)
+        ], capture_output=True, text=True, errors='replace', timeout=600)
+        if r.returncode != 0:
+            raise RuntimeError(f"FFmpeg whisper extract failed: {r.stderr[-500:]}")
         logger.info(f"[EXTRACT] Whisper audio: {whisper_audio}")
 
         if progress:
             progress(0.6, desc="Extracting audio for Demucs (44.1kHz stereo)...")
 
-        subprocess.run([
+        r = subprocess.run([
             "ffmpeg", "-y", "-i", str(video_path),
             "-ar", "44100", "-ac", "2", "-acodec", "pcm_s16le",
             str(full_audio),
-        ], capture_output=True, check=True)
+        ], capture_output=True, text=True, errors='replace', timeout=600)
+        if r.returncode != 0:
+            raise RuntimeError(f"FFmpeg full extract failed: {r.stderr[-500:]}")
         logger.info(f"[EXTRACT] Full audio: {full_audio}")
 
         duration = get_video_duration(video_path)

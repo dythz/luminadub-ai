@@ -58,44 +58,51 @@ def _synthesize_xtts(
     logger.info(f"[SYNTHESIZE] XTTSv2 loaded in {t_load:.1f}s")
 
     total = len(cues)
-    if progress:
-        progress(0.10, desc=f"Synthesizing {total} cues with XTTSv2...")
-
     output_paths = []
     warnings = []
     t_start = time.time()
 
-    for i, cue in enumerate(cues):
-        out_path = str(segments_dir / f"{cue.index:03d}.wav")
-        t_cue = time.time()
-        try:
-            wrapper.synthesize_with_latents(cue.text, out_path)
-            dur = get_audio_duration(Path(out_path))
-            if dur < 0.1:
-                warnings.append(f"Cue {cue.index}: generated audio is silent")
-        except Exception as e:
-            warnings.append(f"Cue {cue.index}: synthesis failed - {e}")
-            dur = 0.0
-        cue_time = time.time() - t_cue
-
-        output_paths.append(Path(out_path))
-
-        done = i + 1
-        pct = done / total * 100
-        elapsed = time.time() - t_start
-        avg = elapsed / done
-        remaining = avg * (total - done)
-        logger.info(
-            f"[SYNTHESIZE] XTTS {done}/{total} ({pct:.0f}%) | "
-            f"cue {cue.index} ({cue.duration():.1f}s SRT -> {dur:.1f}s audio) in {cue_time:.2f}s | "
-            f"elapsed {elapsed:.1f}s | avg {avg:.2f}s/cue | ETA {remaining:.1f}s"
-        )
-
+    try:
         if progress:
-            frac = 0.10 + 0.85 * (done / total)
-            progress(frac, desc=f"XTTS {done}/{total} ({pct:.0f}%) | {elapsed:.1f}s | ETA {remaining:.0f}s")
+            progress(0.10, desc=f"Synthesizing {total} cues with XTTSv2...")
 
-    wrapper.unload()
+        for i, cue in enumerate(cues):
+            out_path = str(segments_dir / f"{cue.index:03d}.wav")
+            t_cue = time.time()
+            try:
+                text = cue.text.strip()
+                if not text:
+                    warnings.append(f"Cue {cue.index}: empty text, skipping")
+                    dur = 0.0
+                else:
+                    wrapper.synthesize_with_latents(text, out_path)
+                    dur = get_audio_duration(Path(out_path))
+                    if dur < 0.1:
+                        warnings.append(f"Cue {cue.index}: generated audio is silent")
+            except Exception as e:
+                warnings.append(f"Cue {cue.index}: synthesis failed - {e}")
+                logger.warning(f"[SYNTHESIZE] Cue {cue.index} failed: {e}")
+                dur = 0.0
+            cue_time = time.time() - t_cue
+
+            output_paths.append(Path(out_path))
+
+            done = i + 1
+            pct = done / total * 100
+            elapsed = time.time() - t_start
+            avg = elapsed / done
+            remaining = avg * (total - done)
+            logger.info(
+                f"[SYNTHESIZE] XTTS {done}/{total} ({pct:.0f}%) | "
+                f"cue {cue.index} ({cue.duration():.1f}s SRT -> {dur:.1f}s audio) in {cue_time:.2f}s | "
+                f"elapsed {elapsed:.1f}s | avg {avg:.2f}s/cue | ETA {remaining:.1f}s"
+            )
+
+            if progress:
+                frac = 0.10 + 0.85 * (done / total)
+                progress(frac, desc=f"XTTS {done}/{total} ({pct:.0f}%) | {elapsed:.1f}s | ETA {remaining:.0f}s")
+    finally:
+        wrapper.unload()
     t_total = time.time() - t_start
     avg_per_cue = t_total / total if total else 0
     logger.info(

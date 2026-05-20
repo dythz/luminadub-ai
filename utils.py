@@ -251,7 +251,7 @@ def mix_audio(
         "-filter_complex", filter_complex,
         "-map", "[mixed]", "-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2",
         str(output_path),
-    ], capture_output=True, check=True)
+    ], capture_output=True, check=True, timeout=300)
 
 
 def _get_video_codec(video_path: Path) -> str:
@@ -294,7 +294,7 @@ def mux_video_audio(video_path: Path, audio_path: Path, output_path: Path, bitra
                 "-map", "0:v:0", "-map", "1:a:0", "-shortest",
                 "-movflags", "+faststart",
                 str(output_path),
-            ], capture_output=True, text=True, errors='replace')
+            ], capture_output=True, text=True, errors='replace', timeout=600)
         else:
             logger.info(f"[MUX] Source codec is {codec}, re-encoding with libx264 (CPU fallback)")
             result = subprocess.run([
@@ -304,7 +304,7 @@ def mux_video_audio(video_path: Path, audio_path: Path, output_path: Path, bitra
                 "-map", "0:v:0", "-map", "1:a:0", "-shortest",
                 "-movflags", "+faststart",
                 str(output_path),
-            ], capture_output=True, text=True, errors='replace')
+            ], capture_output=True, text=True, errors='replace', timeout=600)
     else:
         result = subprocess.run([
             "ffmpeg", "-y", "-i", str(video_path), "-i", str(audio_path),
@@ -312,7 +312,7 @@ def mux_video_audio(video_path: Path, audio_path: Path, output_path: Path, bitra
             "-map", "0:v:0", "-map", "1:a:0", "-shortest",
             "-movflags", "+faststart",
             str(output_path),
-        ], capture_output=True, text=True, errors='replace')
+        ], capture_output=True, text=True, errors='replace', timeout=600)
     if result.returncode != 0:
         if output_path.exists():
             output_path.unlink()
@@ -343,7 +343,7 @@ def mux_video_with_mix(
                 "-map", "0:v:0", "-map", "[mixed]",
                 "-shortest", "-movflags", "+faststart",
                 str(output_path),
-            ], capture_output=True, text=True, errors='replace')
+            ], capture_output=True, text=True, errors='replace', timeout=600)
         else:
             logger.info(f"[MUX+MIX] Source codec is {codec}, re-encoding with libx264 (CPU)")
             result = subprocess.run([
@@ -355,7 +355,7 @@ def mux_video_with_mix(
                 "-map", "0:v:0", "-map", "[mixed]",
                 "-shortest", "-movflags", "+faststart",
                 str(output_path),
-            ], capture_output=True, text=True, errors='replace')
+            ], capture_output=True, text=True, errors='replace', timeout=600)
     else:
         logger.info(f"[MUX+MIX] Source is {codec or 'h264'}, stream copy")
         result = subprocess.run([
@@ -366,7 +366,7 @@ def mux_video_with_mix(
             "-map", "0:v:0", "-map", "[mixed]",
             "-shortest", "-movflags", "+faststart",
             str(output_path),
-        ], capture_output=True, text=True, errors='replace')
+        ], capture_output=True, text=True, errors='replace', timeout=600)
     if result.returncode != 0:
         if output_path.exists():
             output_path.unlink()

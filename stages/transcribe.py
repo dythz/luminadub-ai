@@ -30,33 +30,33 @@ def transcribe(project_dir: Path, config: Config, progress=None) -> StageResult:
 
         wrapper = WhisperModelWrapper(config)
         wrapper.load()
+        try:
+            if progress:
+                progress(0.3, desc="Transcribing audio...")
 
-        if progress:
-            progress(0.3, desc="Transcribing audio...")
+            words = wrapper.transcribe(audio_path)
+            logger.info(f"[TRANSCRIBE] Words detected: {len(words)}")
 
-        words = wrapper.transcribe(audio_path)
-        logger.info(f"[TRANSCRIBE] Words detected: {len(words)}")
+            if progress:
+                progress(0.7, desc="Grouping words into SRT cues...")
 
-        if progress:
-            progress(0.7, desc="Grouping words into SRT cues...")
+            cues = group_words_to_cues(
+                words,
+                words_per_cue=config.WORDS_PER_CUE,
+                max_words_per_cue=config.MAX_WORDS_PER_CUE,
+                max_chars_per_cue=config.MAX_CHARS_PER_CUE,
+                min_duration=config.MIN_CUE_DURATION,
+                min_gap=config.MIN_CUE_GAP,
+                max_duration=config.MAX_CUE_DURATION,
+            )
 
-        cues = group_words_to_cues(
-            words,
-            words_per_cue=config.WORDS_PER_CUE,
-            max_words_per_cue=config.MAX_WORDS_PER_CUE,
-            max_chars_per_cue=config.MAX_CHARS_PER_CUE,
-            min_duration=config.MIN_CUE_DURATION,
-            min_gap=config.MIN_CUE_GAP,
-            max_duration=config.MAX_CUE_DURATION,
-        )
+            write_srt(cues, srt_path)
+            logger.info(f"[TRANSCRIBE] SRT cues: {len(cues)} -> {srt_path}")
 
-        write_srt(cues, srt_path)
-        logger.info(f"[TRANSCRIBE] SRT cues: {len(cues)} -> {srt_path}")
-
-        with open(words_path, "w", encoding="utf-8") as f:
-            json.dump(words, f, ensure_ascii=False, indent=2)
-
-        wrapper.unload()
+            with open(words_path, "w", encoding="utf-8") as f:
+                json.dump(words, f, ensure_ascii=False, indent=2)
+        finally:
+            wrapper.unload()
 
         if progress:
             progress(1.0, desc=f"Transcription complete: {len(cues)} cues")
