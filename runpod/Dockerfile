@@ -30,10 +30,12 @@ RUN pip install --no-cache-dir \
 
 # Grupo 4: Web UI
 RUN pip install --no-cache-dir \
-    "gradio>=5.0.0" \
     "flask>=2.0.0" \
     "flask-cors>=3.0.0" \
     "waitress>=2.1.0"
+
+# Gradio opcional (UI alternativa)
+RUN pip install --no-cache-dir "gradio==4.44.1" || echo "Gradio nao instalado, usando Flask UI"
 
 # Grupo 5: Utilities
 RUN pip install --no-cache-dir \

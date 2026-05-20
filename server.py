@@ -16,7 +16,8 @@ from flask_cors import CORS
 os.environ["COQUI_TOS_AGREED"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS"] = "1"
 
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from config import Config
 from pipeline import DubbingPipeline
