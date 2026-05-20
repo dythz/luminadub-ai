@@ -261,6 +261,51 @@ def upload():
     return jsonify({"project_id": project_id, "filename": f.filename})
 
 
+@app.route("/api/upload/chunk", methods=["POST"])
+def upload_chunk():
+    """Receive one 48 MB chunk of a large file upload and reassemble when complete."""
+    import shutil
+    project_id = request.form.get("project_id", "")
+    chunk_index = int(request.form.get("chunk_index", 0))
+    total_chunks = int(request.form.get("total_chunks", 1))
+    filename = request.form.get("filename", "video.mp4")
+    chunk = request.files.get("chunk")
+
+    if not chunk:
+        return jsonify({"error": "No chunk data"}), 400
+
+    ext = Path(filename).suffix.lower()
+    if ext not in (".mp4", ".mov", ".avi", ".mkv", ".webm"):
+        return jsonify({"error": f"Unsupported format: {ext}"}), 400
+
+    if not project_id:
+        project_id = uuid.uuid4().hex[:12]
+
+    project_dir = CONFIG.PROJECTS_DIR / project_id
+    chunks_dir = project_dir / "chunks"
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    (project_dir / "input").mkdir(exist_ok=True)
+    (project_dir / "output").mkdir(exist_ok=True)
+
+    chunk_path = chunks_dir / f"chunk_{chunk_index:05d}"
+    chunk.save(str(chunk_path))
+    logger.info(f"[UPLOAD] Chunk {chunk_index+1}/{total_chunks} for {filename} (project {project_id})")
+
+    received = len(list(chunks_dir.glob("chunk_*")))
+    if received >= total_chunks:
+        dest = project_dir / "input" / filename
+        with open(str(dest), "wb") as out:
+            for i in range(total_chunks):
+                cp = chunks_dir / f"chunk_{i:05d}"
+                with open(str(cp), "rb") as cf:
+                    out.write(cf.read())
+        shutil.rmtree(str(chunks_dir))
+        logger.info(f"[UPLOAD] Assembled {filename} ({dest.stat().st_size // 1024 // 1024} MB)")
+        return jsonify({"project_id": project_id, "filename": filename, "complete": True})
+
+    return jsonify({"project_id": project_id, "chunk_index": chunk_index, "received": received, "complete": False})
+
+
 @app.route("/api/jobs")
 def list_jobs():
     """List all queue jobs (active, queued, recent done)."""

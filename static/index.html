@@ -365,6 +365,30 @@ function renderQueue(){
     }).catch(function(){});
 }
 
+// ── CHUNKED UPLOAD ──
+async function uploadInChunks(file, fileIdx, totalFiles){
+    var CHUNK=48*1024*1024; // 48 MB per chunk
+    var total=Math.ceil(file.size/CHUNK);
+    var projectId=null;
+    for(var i=0;i<total;i++){
+        var chunk=file.slice(i*CHUNK,Math.min((i+1)*CHUNK,file.size));
+        var fd=new FormData();
+        fd.append('chunk',chunk,file.name);
+        fd.append('chunk_index',i);
+        fd.append('total_chunks',total);
+        fd.append('filename',file.name);
+        if(projectId)fd.append('project_id',projectId);
+        var pct=Math.round((i+1)/total*100);
+        document.getElementById('startBtn').innerHTML='<span class="material-symbols-outlined animate-spin" style="font-size:18px">progress_activity</span> '+(fileIdx+1)+'/'+totalFiles+' — '+pct+'%';
+        var resp=await fetch('/api/upload/chunk',{method:'POST',body:fd});
+        if(!resp.ok){var t=await resp.text();throw new Error('Chunk '+i+' failed: '+resp.status+' '+t)}
+        var data=await resp.json();
+        if(data.error)throw new Error(data.error);
+        projectId=data.project_id;
+    }
+    return{project_id:projectId,filename:file.name};
+}
+
 // ── START PIPELINE ──
 document.getElementById('startBtn').addEventListener('click',async function(){
     if(!videoFiles.length){alert('Selecione pelo menos um video!');return}
@@ -381,9 +405,8 @@ document.getElementById('startBtn').addEventListener('click',async function(){
     for(var i=0;i<filesToSend.length;i++){
         var file=filesToSend[i];
         try{
-            var fd=new FormData();fd.append('video',file,file.name);
-            var up=await(await fetch('/api/upload',{method:'POST',body:fd})).json();
-            if(up.error){console.error('Upload error:',up.error);continue}
+            var up=await uploadInChunks(file,i,filesToSend.length);
+            if(!up||up.error){console.error('Upload error:',up&&up.error);continue}
             var pid=up.project_id;
             var sid=pid+'-'+Date.now()+'-'+i;
 
