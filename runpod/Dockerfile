@@ -9,9 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Python deps
+# Python deps (torch/torchaudio ja estao na imagem base)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN grep -vE "^(torch|torchaudio|#)" requirements.txt > /tmp/requirements-filtered.txt && \
+    pip install --no-cache-dir -r /tmp/requirements-filtered.txt
 
 # Copy project
 COPY . .
