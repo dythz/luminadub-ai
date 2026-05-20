@@ -156,12 +156,12 @@ def get_audio_duration(path: Path) -> float:
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, errors='replace', timeout=15,
         )
         if result.returncode != 0:
             return 0.0
         return float(result.stdout.strip())
-    except (FileNotFoundError, ValueError):
+    except (FileNotFoundError, ValueError, subprocess.TimeoutExpired):
         return 0.0
 
 
@@ -179,14 +179,14 @@ def stretch_audio(input_path: Path, output_path: Path, ratio: float, method: str
             "ffmpeg", "-y", "-i", str(input_path),
             "-af", f"rubberband=tempo={ratio:.6f}",
             "-ar", "44100", "-ac", "1", "-vn", str(output_path),
-        ], capture_output=True, check=True)
+        ], capture_output=True, check=True, timeout=60)
     else:  # atempo
         atempo_chain = _compute_atempo_chain(ratio)
         subprocess.run([
             "ffmpeg", "-y", "-i", str(input_path),
             "-af", atempo_chain,
             "-ar", "44100", "-ac", "1", "-vn", str(output_path),
-        ], capture_output=True, check=True)
+        ], capture_output=True, check=True, timeout=60)
 
 
 def _compute_atempo_chain(target_ratio: float) -> str:
@@ -269,7 +269,7 @@ def _nvenc_available() -> bool:
     try:
         result = subprocess.run(
             ["ffmpeg", "-hide_banner", "-encoders"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, errors='replace', timeout=10,
         )
         return "h264_nvenc" in result.stdout
     except Exception:
@@ -392,7 +392,7 @@ def burn_subtitles(video_path: Path, srt_path: Path, output_path: Path) -> None:
             "-c:a", "copy",
             "-movflags", "+faststart",
             str(output_path),
-        ], capture_output=True, text=True, cwd=str(temp_dir))
+        ], capture_output=True, text=True, errors='replace', cwd=str(temp_dir))
         if result.returncode != 0:
             if output_path.exists():
                 output_path.unlink()

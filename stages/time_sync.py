@@ -53,7 +53,12 @@ def time_sync(project_dir: Path, config: Config, progress=None) -> StageResult:
             else:
                 next_cue = cues[i + 1] if i + 1 < len(cues) else None
                 t_cue = time.time()
-                result = _sync_cue_audio(cue, synth_path, synced_path, config, next_cue=next_cue)
+                try:
+                    result = _sync_cue_audio(cue, synth_path, synced_path, config, next_cue=next_cue)
+                except Exception as e:
+                    logger.warning(f"[SYNC] Cue {cue.index} failed ({e}), writing silence")
+                    _write_silence(synced_path, cue.duration())
+                    result = {"ratio": 0, "method": "error_silence", "warnings": [f"Cue {cue.index} error: {e}"]}
                 cue_time = time.time() - t_cue
                 method = result["method"]
                 ratio = result["ratio"]
