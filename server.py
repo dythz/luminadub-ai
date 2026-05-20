@@ -387,7 +387,7 @@ def sse_stream(session_id):
     def generate():
         while True:
             try:
-                event, data = sse_queues[session_id].get(timeout=300)
+                event, data = sse_queues[session_id].get(timeout=25)
                 yield f"event: {event}\ndata: {json.dumps(data)}\n\n"
                 if event in ("done", "error"):
                     break
@@ -527,7 +527,7 @@ if __name__ == "__main__":
     try:
         from waitress import serve as waitress_serve
         print("  Using waitress (production WSGI server)")
-        waitress_serve(app, host="0.0.0.0", port=5000, threads=4, max_request_body_size=10*1024*1024*1024)
+        waitress_serve(app, host="0.0.0.0", port=5000, threads=16, max_request_body_size=10*1024*1024*1024)
     except ImportError:
         print("  Using Flask dev server (install waitress for stability)")
         app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
