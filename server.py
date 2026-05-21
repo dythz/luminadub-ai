@@ -313,13 +313,13 @@ def upload_chunk():
     chunk.save(str(chunk_path))
     logger.info(f"[UPLOAD] Chunk {chunk_index+1}/{total_chunks} for {filename} (project {project_id})")
 
-    # Check all specific chunk files exist (count alone can race with parallel uploads)
+    received = len(list(chunks_dir.glob("chunk_*")))
     all_present = received >= total_chunks and all(
         (chunks_dir / f"chunk_{i:05d}").exists() for i in range(total_chunks)
     )
     if all_present:
         dest = project_dir / "input" / filename
-        if not dest.exists():  # prevent double-assembly if two chunks finish simultaneously
+        if not dest.exists():
             with open(str(dest), "wb") as out:
                 for i in range(total_chunks):
                     cp = chunks_dir / f"chunk_{i:05d}"
