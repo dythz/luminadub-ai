@@ -30,7 +30,6 @@ class WhisperModelWrapper:
             vad_parameters=dict(min_silence_duration_ms=500),
             beam_size=5,
             best_of=5,
-            batch_size=16,
         )
         words = []
         for seg in segments:
