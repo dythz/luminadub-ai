@@ -50,4 +50,4 @@ ENV PYTHONUNBUFFERED=1
 
 VOLUME ["/app/data"]
 EXPOSE 5000
-CMD ["python3", "server.py"]
+CMD ["sh", "-c", "python3 /app/runpod/preload_models.py && python3 server.py"]
