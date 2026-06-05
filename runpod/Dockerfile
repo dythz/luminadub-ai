@@ -6,7 +6,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN python3 -m pip install --upgrade pip
 
-# Torch nightly cu128 para Blackwell sm_120
 RUN pip install --pre torch torchaudio \
     --index-url https://download.pytorch.org/whl/nightly/cu128 \
     --force-reinstall
@@ -25,7 +24,12 @@ RUN pip install --no-cache-dir \
     "coqui-tts>=0.27.0" \
     "edge-tts>=6.0.0"
 
-RUN python3 -c 'import glob; [open(f,"w").write(open(f).read().replace("from transformers.pytorch_utils import isin_mps_friendly as isin","import torch; isin = torch.isin")) for f in glob.glob("/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py")]; print("Tortoise patch OK")'
+RUN pip uninstall torchvision -y 2>/dev/null || true
+
+RUN pip install --no-cache-dir torchcodec \
+    --index-url https://download.pytorch.org/whl/nightly/cu128
+
+RUN python3 -c 'import glob; [open(f,"w").write(open(f).read().replace("from transformers.pytorch_utils import isin_mps_friendly as isin","import torch; isin = torch.isin")) for f in glob.glob("/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py") if open(f).read()]'
 
 RUN pip install --no-cache-dir --ignore-installed \
     "blinker>=1.9.0" "flask>=2.0.0" "flask-cors>=3.0.0" \
@@ -34,8 +38,6 @@ RUN pip install --no-cache-dir --ignore-installed \
 RUN pip install --no-cache-dir \
     "soundfile>=0.12.0" "numpy>=1.24.0,<2.0.0" \
     "audiostretchy>=1.2.0" "psutil>=5.9.0" "pysubs2>=1.7.0"
-
-RUN pip uninstall torchvision -y 2>/dev/null || true
 
 RUN pip install --no-cache-dir "gradio==4.44.1" || echo "Gradio nao instalado"
 
