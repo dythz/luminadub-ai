@@ -29,7 +29,14 @@ RUN pip uninstall torchvision -y 2>/dev/null || true
 RUN pip install --no-cache-dir torchcodec \
     --index-url https://download.pytorch.org/whl/nightly/cu128
 
-RUN python3 -c 'import glob; [open(f,"w").write(open(f).read().replace("from transformers.pytorch_utils import isin_mps_friendly as isin","import torch; isin = torch.isin")) for f in glob.glob("/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py") if open(f).read()]'
+RUN pip install coqui-tts --force-reinstall -q && \
+    FILE=$(python3 -c "import glob; files=glob.glob('/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py'); print(files[0] if files else '')") && \
+    if [ -n "$FILE" ] && grep -q "isin_mps_friendly" "$FILE"; then \
+        sed -i 's/from transformers.pytorch_utils import isin_mps_friendly as isin/import torch; isin = torch.isin/' "$FILE" && \
+        echo "Patch aplicado"; \
+    else \
+        echo "Patch nao necessario"; \
+    fi
 
 RUN pip install --no-cache-dir --ignore-installed \
     "blinker>=1.9.0" "flask>=2.0.0" "flask-cors>=3.0.0" \
@@ -50,4 +57,4 @@ ENV PYTHONUNBUFFERED=1
 
 VOLUME ["/app/data"]
 EXPOSE 5000
-CMD ["sh", "-c", "python3 /app/runpod/preload_models.py && python3 server.py"]
+CMD ["python3", "server.py"]
