@@ -30,17 +30,7 @@ RUN pip install --no-cache-dir \
     "edge-tts>=6.0.0"
 
 # Patch coqui-tts: corrige isin_mps_friendly removido no transformers>=4.46
-RUN python3 -c "
-import glob
-for f in glob.glob('/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py'):
-    content = open(f).read()
-    patched = content.replace(
-        'from transformers.pytorch_utils import isin_mps_friendly as isin',
-        'import torch; isin = torch.isin'
-    )
-    open(f, 'w').write(patched)
-print('Tortoise patch OK')
-"
+RUN python3 -c 'import glob; [open(f,"w").write(open(f).read().replace("from transformers.pytorch_utils import isin_mps_friendly as isin","import torch; isin = torch.isin")) for f in glob.glob("/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py")]; print("Tortoise patch OK")'
 
 # Grupo 4: Web UI
 RUN pip install --no-cache-dir --ignore-installed \
