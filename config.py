@@ -2,31 +2,28 @@ import os
 from pathlib import Path
 from dataclasses import dataclass, field
 
-# Auto-detect base directory: use APP_BASE_DIR env var, or the directory of this file
 _BASE = Path(os.environ.get("APP_BASE_DIR", str(Path(__file__).parent)))
-
 
 @dataclass
 class Config:
-    # Paths
     BASE_DIR: Path = _BASE
     PROJECTS_DIR: Path = _BASE / "data" / "projects"
     MODEL_CACHE_DIR: Path = _BASE / "data" / "models"
 
     # GPU
     DEVICE: str = "cuda"
-    MAX_VRAM_MB: int = 12288
+    MAX_VRAM_MB: int = 90000
 
     # Demucs
     DEMUCS_MODEL: str = "htdemucs"
     DEMUCS_TWO_STEM: str = "vocals"
-    DEMUCS_SEGMENT: float = 10.0
-    DEMUCS_SHIFTS: int = 1
+    DEMUCS_SEGMENT: float = 40.0
+    DEMUCS_SHIFTS: int = 4
     DEMUCS_OVERLAP: float = 0.25
 
-    # Whisper - valid: tiny, base, small, medium, large-v3, large, distil-large-v3
+    # Whisper
     WHISPER_MODEL: str = "large-v3"
-    WHISPER_COMPUTE_TYPE: str = "int8_float16"
+    WHISPER_COMPUTE_TYPE: str = "float16"
     WHISPER_DEVICE: str = "cuda"
     WHISPER_LANGUAGE: str = "en"
     WHISPER_VAD_FILTER: bool = True
@@ -38,7 +35,7 @@ class Config:
     MAX_CUE_DURATION: float = 10.0
 
     # Translation
-    TRANSLATION_ENGINE: str = "opus-mt"  # "opus-mt" or "ollama"
+    TRANSLATION_ENGINE: str = "opus-mt"
     TRANSLATION_MODEL: str = "Helsinki-NLP/opus-mt-tc-big-en-pt"
     TRANSLATION_DEVICE: str = "cuda"
     OLLAMA_MODEL: str = "llama3.2"
@@ -61,8 +58,8 @@ class Config:
     TOLERANCE_RATIO: float = 0.08
 
     # Audio assembly
-    FADE_MS: float = 30.0       # Fade-in/out duration per segment (ms)
-    CROSSFADE_MS: float = 50.0  # Crossfade overlap between adjacent cues (ms)
+    FADE_MS: float = 30.0
+    CROSSFADE_MS: float = 50.0
 
     # Merge
     BACKGROUND_VOLUME: float = 0.7
@@ -88,7 +85,6 @@ class Config:
         "merge": "Merge Video"
     })
 
-    # User toggles
     enable_vocal_separation: bool = True
     tts_engine: str = "xtts"
     reference_audio_path: str = ""
