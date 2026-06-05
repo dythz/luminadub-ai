@@ -1,4 +1,4 @@
-FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
