@@ -1,4 +1,4 @@
-FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -57,7 +57,7 @@ RUN pip install --no-cache-dir torchcodec
 # Grupo 6: Utilities
 RUN pip install --no-cache-dir \
     "soundfile>=0.12.0" \
-    "numpy>=1.24.0" \
+    "numpy>=1.24.0,<2.0.0" \
     "audiostretchy>=1.2.0" \
     "psutil>=5.9.0" \
     "pysubs2>=1.7.0"
