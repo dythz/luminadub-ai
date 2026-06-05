@@ -6,10 +6,31 @@ import torchaudio
 from concurrent.futures import ThreadPoolExecutor
 from config import Config
 
+MAX_XTTS_CHARS = 250
+
+
+def _clean_text(text: str) -> str:
+    text = text.strip()
+    words = text.split()
+    if len(words) > 5:
+        unique = set(words)
+        if len(unique) < len(words) * 0.3:
+            text = " ".join(list(dict.fromkeys(words))[:20])
+    return text[:MAX_XTTS_CHARS]
+
 
 class XTTSParallelWrapper:
-    def __init__(self, config: Config, num_instances: int = 4):
+    def __init__(self, config: Config, num_instances: int = None):
         self.config = config
+        if num_instances is None:
+            vram_gb = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            if vram_gb >= 80:
+                num_instances = 4
+            elif vram_gb >= 40:
+                num_instances = 2
+            else:
+                num_instances = 1
+            print(f"[XTTS] VRAM: {vram_gb:.0f}GB → {num_instances} instancia(s)")
         self.num_instances = num_instances
         self.models = []
         self.latents = []
@@ -35,6 +56,9 @@ class XTTSParallelWrapper:
 
     def _synth_one(self, args):
         idx, text, output_path = args
+        text = _clean_text(text)
+        if not text:
+            return None
         model_idx = idx % self.num_instances
         tts = self.models[model_idx]
         gpt_cond_latent, speaker_embedding = self.latents[model_idx]
