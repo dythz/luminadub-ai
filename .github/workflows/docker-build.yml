@@ -1,14 +1,13 @@
 name: Build & Push Docker Image
-
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build-blackwell:
+    name: Build Blackwell (cu128)
     runs-on: ubuntu-latest
-
     steps:
       - name: Liberar espaco em disco
         uses: jlumbroso/free-disk-space@main
@@ -33,7 +32,7 @@ jobs:
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3.7.1
 
-      - name: Build e Push da imagem
+      - name: Build e Push Blackwell
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -41,5 +40,44 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/luminadub-ai:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/luminadub-ai:blackwell
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-cuda118:
+    name: Build RTX Normal (cu118)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Liberar espaco em disco
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4.2.2
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@v3.3.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3.7.1
+
+      - name: Build e Push RTX Normal
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./runpod/Dockerfile.cuda118
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/luminadub-ai:cuda118
           cache-from: type=gha
           cache-to: type=gha,mode=max
