@@ -1,58 +1,42 @@
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
-# System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    git \
-    build-essential \
-    python3-pip \
-    libsndfile1 \
-    libsndfile1-dev \
+    ffmpeg git build-essential python3-pip libsndfile1 libsndfile1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --upgrade pip
 
+# Torch nightly cu128 para Blackwell sm_120
+RUN pip install --pre torch torchaudio \
+    --index-url https://download.pytorch.org/whl/nightly/cu128 \
+    --force-reinstall
+
 WORKDIR /app
 
-# Grupo 1: ML core
 RUN pip install --no-cache-dir \
     "faster-whisper>=1.0.0" \
     "transformers>=4.50.0" \
     "sentencepiece>=0.2.0" \
     "sacremoses>=0.1.0"
 
-# Grupo 2: Audio separation
 RUN pip install --no-cache-dir "demucs>=4.0.0"
 
-# Grupo 3: TTS
 RUN pip install --no-cache-dir \
     "coqui-tts>=0.27.0" \
     "edge-tts>=6.0.0"
 
-# Patch coqui-tts: corrige isin_mps_friendly removido no transformers>=4.46
 RUN python3 -c 'import glob; [open(f,"w").write(open(f).read().replace("from transformers.pytorch_utils import isin_mps_friendly as isin","import torch; isin = torch.isin")) for f in glob.glob("/usr/local/lib/python*/dist-packages/TTS/tts/layers/tortoise/autoregressive.py")]; print("Tortoise patch OK")'
 
-# Grupo 4: Web UI
 RUN pip install --no-cache-dir --ignore-installed \
-    "blinker>=1.9.0" \
-    "flask>=2.0.0" \
-    "flask-cors>=3.0.0" \
-    "waitress>=2.1.0" \
-    "gunicorn>=21.0.0" \
-    "gevent>=23.0.0"
+    "blinker>=1.9.0" "flask>=2.0.0" "flask-cors>=3.0.0" \
+    "waitress>=2.1.0" "gunicorn>=21.0.0" "gevent>=23.0.0"
 
-# Grupo 5: Audio/video
-RUN pip install --no-cache-dir torchcodec
-
-# Grupo 6: Utilities
 RUN pip install --no-cache-dir \
-    "soundfile>=0.12.0" \
-    "numpy>=1.24.0,<2.0.0" \
-    "audiostretchy>=1.2.0" \
-    "psutil>=5.9.0" \
-    "pysubs2>=1.7.0"
+    "soundfile>=0.12.0" "numpy>=1.24.0,<2.0.0" \
+    "audiostretchy>=1.2.0" "psutil>=5.9.0" "pysubs2>=1.7.0"
 
-# Gradio opcional
+RUN pip uninstall torchvision -y 2>/dev/null || true
+
 RUN pip install --no-cache-dir "gradio==4.44.1" || echo "Gradio nao instalado"
 
 COPY requirements.txt .
