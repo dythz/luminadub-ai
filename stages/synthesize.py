@@ -9,6 +9,18 @@ from utils import StageResult, read_srt, get_audio_duration
 
 logger = logging.getLogger("dubbing")
 
+MAX_XTTS_CHARS = 250
+
+
+def _clean_text(text: str) -> str:
+    text = text.strip()
+    words = text.split()
+    if len(words) > 5:
+        unique = set(words)
+        if len(unique) < len(words) * 0.3:
+            text = " ".join(list(dict.fromkeys(words))[:20])
+    return text[:MAX_XTTS_CHARS]
+
 
 def synthesize(project_dir: Path, config: Config, progress=None) -> StageResult:
     try:
@@ -36,17 +48,17 @@ def _synthesize_xtts(project_dir, config, cues, segments_dir, progress):
     if not reference_audio or not Path(reference_audio).exists():
         return StageResult(success=False, error="No reference audio for XTTS voice cloning.")
     if progress:
-        progress(0.05, desc="Loading 4x XTTSv2 instances...")
+        progress(0.05, desc="Loading XTTSv2 instances...")
     t_load_start = time.time()
-    wrapper = XTTSParallelWrapper(config, num_instances=4)
+    wrapper = XTTSParallelWrapper(config)
     wrapper.load(reference_audio=reference_audio)
     t_load = time.time() - t_load_start
-    logger.info(f"[SYNTHESIZE] 4x XTTSv2 loaded in {t_load:.1f}s")
+    logger.info(f"[SYNTHESIZE] XTTSv2 loaded in {t_load:.1f}s")
     total = len(cues)
     warnings = []
     t_start = time.time()
     if progress:
-        progress(0.10, desc=f"Synthesizing {total} cues em paralelo (4x)...")
+        progress(0.10, desc=f"Synthesizing {total} cues...")
     try:
         output_paths = wrapper.synthesize_batch(cues, segments_dir)
     except Exception as e:
@@ -55,7 +67,7 @@ def _synthesize_xtts(project_dir, config, cues, segments_dir, progress):
     wrapper.unload()
     t_total = time.time() - t_start
     avg = t_total / total if total else 0
-    logger.info(f"[SYNTHESIZE] XTTS paralelo done: {total} cues em {t_total:.1f}s ({avg:.2f}s/cue)")
+    logger.info(f"[SYNTHESIZE] XTTS done: {total} cues em {t_total:.1f}s ({avg:.2f}s/cue)")
     if progress:
         progress(1.0, desc=f"TTS done: {total} cues em {t_total:.1f}s ({avg:.2f}s/cue)")
     return StageResult(
